@@ -1,0 +1,1 @@
+<resources><style name="WordTheme" parent="@android:style/Theme.Material.Light.NoActionBar"><item name="android:windowBackground">#F5F3EC</item><item name="android:windowSplashScreenBackground">#F5F3EC</item><item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item><item name="android:colorAccent">#255651</item></style></resources>

@@ -1,0 +1,20 @@
+pluginManagement {
+    repositories {
+        def local = new File(System.getenv("LOCALAPPDATA") ?: ".", "Tingye/maven")
+        if (local.isDirectory()) maven { url = local.toURI() }
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        def local = new File(System.getenv("LOCALAPPDATA") ?: ".", "Tingye/maven")
+        if (local.isDirectory()) maven { url = local.toURI() }
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'Slovo'
+include ':app'

@@ -1,0 +1,18 @@
+词汐 0.7.0 端侧模型和外部服务
+
+Qwen2.5-0.5B-Instruct-GGUF，Q4_0，Apache 2.0
+https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
+版本 9217f5db79a29953eb74d5343926648285ec7e67
+文件 qwen2.5-0.5b-instruct-q4_0.gguf
+SHA-256 7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed
+模型由 Qwen 团队发布，词汐仅分片打包，首次使用时还原。内置权重不上云。
+
+llama.cpp b7371，MIT
+https://github.com/ggml-org/llama.cpp/tree/b7371
+使用 Android NDK r27c 编译，提供 arm64-v8a、armeabi-v7a 和 x86_64 本地 CPU 推理。
+工程内保留词汐 JNI 和构建脚本，上游源码可由上述版本下载。
+
+使用自带 API 时的接口和额度说明
+https://api-docs.deepseek.com/api/get-user-balance/
+https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope
+https://developers.openai.com/api/reference/resources/chat

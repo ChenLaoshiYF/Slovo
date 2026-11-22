@@ -1,0 +1,10 @@
+.gradle/
+.idea/
+**/build/
+local.properties
+*.jks
+*.keystore
+*.hprof
+*.apk
+__pycache__/
+app/src/main/assets/ai/qwen-q4.part*
