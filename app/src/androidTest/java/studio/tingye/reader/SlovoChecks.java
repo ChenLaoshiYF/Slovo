@@ -21,6 +21,7 @@ public final class SlovoChecks extends Instrumentation {
     try {
       String suite=arguments.getString("suite","data");
       if(suite.equals("speech"))speech();
+      else if(suite.equals("installer"))installer();
       else if(suite.equals("chat"))chat();
       else data();
       output.putString("stream","PASS "+suite+" · "+checks+" checks\n");finish(-1,output);
@@ -118,5 +119,32 @@ public final class SlovoChecks extends Instrumentation {
       history.add(user);history.add(reply);
     }
     LocalLanguageModel.stop();
+  }
+
+  /** Run on a versionCode 10 QA build after copying the published APK into its cache. */
+  private void installer() throws Exception {
+    android.content.Context context=getTargetContext();
+    java.io.File file=UpdateFile.file(context);
+    java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");
+    try(java.io.InputStream in=new java.io.FileInputStream(file)) {
+      byte[] buffer=new byte[65536];for(int n;(n=in.read(buffer))!=-1;)digest.update(buffer,0,n);
+    }
+    StringBuilder sha=new StringBuilder();
+    for(byte b:digest.digest())sha.append(String.format(Locale.ROOT,"%02x",b&255));
+    require(sha.toString().equals("4492bbc7ad53bdc78158c24f32161b1550377b798dd70b45d65cf6e6b0affeb0"),"published complete APK checksum");
+    AppUpdates.verify(context,file,11);require(true,"published APK package, version and installed certificate");
+    require(context.getPackageManager().canRequestPackageInstalls(),"installer permission granted in Android settings");
+    WordActivity owner=(WordActivity)startActivitySync(new android.content.Intent(context,WordActivity.class)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+    java.lang.reflect.Field field=WordActivity.class.getDeclaredField("updates");field.setAccessible(true);
+    AppUpdates updates=(AppUpdates)field.get(owner);
+    java.lang.reflect.Field release=AppUpdates.class.getDeclaredField("release");release.setAccessible(true);
+    release.set(updates,new JSONObject().put("versionCode",11));
+    Method install=AppUpdates.class.getDeclaredMethod("install");install.setAccessible(true);
+    runOnMainSync(()->{try {install.invoke(updates);}catch(Exception e){throw new RuntimeException(e);}});
+    require(true,"app-owned content URI passed to the Android installer");
+    // Keep the test's launch task alive while the tester confirms installation.
+    // Replacing the target package will end instrumentation, as expected.
+    Thread.sleep(120000);
   }
 }
