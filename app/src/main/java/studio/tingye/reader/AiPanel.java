@@ -37,7 +37,7 @@ final class AiPanel {
 
   void settings() {
     a.gap(a.body,12);
-    a.section("手机模型","Qwen2.5 · 0.5B");
+    a.section("手机模型","Qwen3 · 0.6B");
     a.settingSwitch("启用手机 AI","可在离线时生成短建议和试译俄语句子。首次启用后使用时会准备模型文件。",
         LocalLanguageModel.ENABLED);
     a.gap(a.body,15);

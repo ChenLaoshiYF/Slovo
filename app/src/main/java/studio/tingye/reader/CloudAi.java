@@ -109,6 +109,22 @@ final class CloudAi {
   }
 
   static Reply complete(SharedPreferences prefs,Provider provider,String instruction,String input) throws Exception {
+    JSONArray messages=new JSONArray()
+        .put(new JSONObject().put("role","system").put("content",instruction))
+        .put(new JSONObject().put("role","user").put("content",input));
+    return send(prefs,provider,messages);
+  }
+
+  static Reply chat(SharedPreferences prefs,Provider provider,String instruction,
+      java.util.List<String> history,String input) throws Exception {
+    JSONArray messages=new JSONArray().put(new JSONObject().put("role","system").put("content",instruction));
+    for(int i=Math.max(0,history.size()-12);i<history.size();i++)
+      messages.put(new JSONObject().put("role",i%2==0?"user":"assistant").put("content",history.get(i)));
+    messages.put(new JSONObject().put("role","user").put("content",input));
+    return send(prefs,provider,messages);
+  }
+
+  private static Reply send(SharedPreferences prefs,Provider provider,JSONArray messages) throws Exception {
     String endpoint,model,key,stored;
     synchronized(CloudAi.class) {
       endpoint=endpoint(prefs,provider);
@@ -116,11 +132,9 @@ final class CloudAi {
       key=rawKey(prefs,provider);
       stored=prefs.getString("keyEncrypted_"+provider.name(),"");
     }
-    JSONArray messages=new JSONArray()
-        .put(new JSONObject().put("role","system").put("content",instruction))
-        .put(new JSONObject().put("role","user").put("content",input));
+
     JSONObject body=new JSONObject().put("model",model).put("messages",messages)
-        .put("stream",false).put("max_tokens",180).put("temperature",.3);
+        .put("stream",false).put("max_tokens",320).put("temperature",.3);
     if(provider==Provider.DEEPSEEK)body.put("thinking",new JSONObject().put("type","disabled"));
     if(provider==Provider.QWEN)body.put("enable_thinking",false);
     JSONObject response=request(endpoint+"/chat/completions",key,body);

@@ -1,0 +1,20 @@
+词汐 0.9.0 内置俄语语音与详细词典
+
+sherpa-onnx v1.12.17，Apache-2.0。未修改的官方 Android AAR。
+https://github.com/k2-fsa/sherpa-onnx/tree/v1.12.17
+其中的 ONNX Runtime 按 MIT 分发，Kotlin 标准库按 Apache-2.0 分发。
+Piper Denis int8 模型来自 sherpa-onnx 的 tts-models 发布，原模型卡将数据集标为 CC0。
+https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
+https://huggingface.co/rhasspy/piper-voices/blob/v1.0.0/ru/ru_RU/denis/medium/MODEL_CARD
+
+Piper 的 eSpeak NG 音素化器按 GPL-3.0 分发。该组合发行及其应用源码依照仓库 LICENSE 提供，词典与摄影等独立数据保留各自许可。
+对应音素化器源码固定于 csukuangfj/espeak-ng f6fed6c58b5e0998b8e68c6610125e2d07d595a7。
+https://github.com/csukuangfj/espeak-ng/tree/f6fed6c58b5e0998b8e68c6610125e2d07d595a7
+完整语音依赖的构建说明见 sherpa-onnx 固定标签的 CMake 文件。
+本项目的构建及打包脚本见 tools/fetch_speech.py，界面与集成源码见 app/src/main。
+https://github.com/ChenLaoshiYF/Slovo
+
+详细词条由中文维基词典 / Kaikki 的完整义项、OpenRussian 词形表和 Tatoeba 俄汉译对整理，许可分别为 CC BY-SA 4.0、CC BY-SA 4.0、CC BY 2.0 FR。转换为简体中文、标记重音、建立词形索引，并编排中文语法说明。所用原始来源与作者查询方式同「数据与依赖.txt」。
+详细数据共 86,791 条，27,249 条含变化表。并非每条均有全部释义、变化表或例句。原创教学条目见 tools/dictionary_notes.json，编排工具见 tools/prepare_details.py。
+
+英语和中文识别文本使用同一固定版本 eSpeak NG 的轻量语音合成，声音较机械，均随安装包提供。对应 JNI 源码在 app/src/main/cpp/pronunciation，构建脚本为 tools/build_speech.ps1。

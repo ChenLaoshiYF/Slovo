@@ -36,9 +36,20 @@ final class RoleChat {
     }
 
     String instruction() {
-      return "You are "+persona+". Continue this conversation in one or two short, natural Russian sentences. "
-          +"Speak at A1-A2 level. Answer the user in character, then ask one related question. "
-          +"If the user asks for an explanation in Chinese, answer briefly in Chinese.";
+      return "你是耐心的俄语老师，通过角色扮演教中国初学者。当前角色是 "+persona+"。"
+          +"始终围绕俄语学习，无论用户用什么语言，都帮他用俄语表达意思。"
+          +"使用简单的 A1-A2 俄语，必要时用一句中文解释。纠正明显语法错误。"
+          +"每次至少给一句完整俄语，最后问一个符合当前场景的俄语问题。不要编造词义，不要夹用英文。 /no_think";
+
+    }
+
+    String practice() {
+      switch(this) {
+        case CAFE:return "Мне, пожалуйста, чай.\n请给我一杯茶。\nЧто вы хотите заказать?";
+        case STATION:return "Мне нужен билет до Москвы.\n我需要一张去莫斯科的票。\nКогда вы хотите поехать?";
+        case STUDENT:return "Я учусь в университете.\n我在大学读书。\nЧто ты изучаешь?";
+        default:return "Я учу русский язык.\n我正在学俄语。\nКак тебя зовут?";
+      }
     }
   }
 
@@ -55,6 +66,7 @@ final class RoleChat {
   private EditText input;
   private View send;
   private boolean generating;
+  private boolean cloud() { return a.getPreferences(0).getBoolean("roleChatCloud",false); }
 
   RoleChat(WordActivity activity) {
     a=activity;
@@ -69,6 +81,10 @@ final class RoleChat {
     actions.addView(a.action("重开",0,false,this::reset));
     a.gap(a.body,8);
     a.add(a.body,actions,-2);
+    a.gap(a.body,6);
+    a.add(a.body,a.action(cloud()?"使用我的 API ▾":"使用手机 AI ▾",0,false,this::pickEngine),-2);
+    a.gap(a.body,5);
+    a.add(a.body,a.txt(cloud()?"发送时会把当前对话传给你选择的服务。":"常见场景用校订课卡辅助，自由对话由手机模型生成。复杂问题可切换自己的 API。",13,PaperActivity.muted,false),-2);
     a.gap(a.body,8);
     messages=a.box(true);
     a.add(a.body,messages,-2);
@@ -76,7 +92,7 @@ final class RoleChat {
 
     input=null;
     send=null;
-    if(!LocalLanguageModel.enabled(a.getPreferences(0))) {
+    if(!cloud() && !LocalLanguageModel.enabled(a.getPreferences(0))) {
       a.gap(a.body,9);
       a.add(a.body,a.action("开启手机 AI",R.drawable.s_gear,true,()->a.openAiSettings("role_chat")),-2);
       return;
@@ -84,13 +100,13 @@ final class RoleChat {
     LinearLayout dock=a.box(false);
     dock.setGravity(Gravity.CENTER_VERTICAL);
     input=new EditText(a);
-    input.setHint("用俄语回一句");
+    input.setHint("中文也可以，我会带你用俄语说");
     input.setContentDescription("对话输入");
     input.setTextSize(16);
     input.setTextColor(PaperActivity.ink);
     input.setHintTextColor(PaperActivity.muted);
     input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-    input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(160)});
+    input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(240)});
     input.setImeOptions(EditorInfo.IME_ACTION_SEND);
     input.setOnEditorActionListener((v,id,event)->{
       if(id!=EditorInfo.IME_ACTION_SEND)return false;
@@ -108,7 +124,31 @@ final class RoleChat {
     dock.addView(send);
     updateSend();
     a.dock(dock);
+    if(a.getResources().getConfiguration().screenWidthDp>=840) {
+      LinearLayout side=a.secondary();
+      a.add(side,a.txt("这一轮怎么说",20,PaperActivity.blue,true),-2);
+      a.gap(side,14);
+      a.add(side,a.txt(role.practice(),19,PaperActivity.ink,false),-2);
+      a.gap(side,16);
+      a.add(side,a.action("听示范",R.drawable.s_audio,false,()->a.voice.playExtracted(PhotoText.russianSource(role.practice()))),-2);
+      a.gap(side,16);
+      a.add(side,a.txt("想到什么就说。卡住时可以用中文问“这句怎么说”，或让对方再说慢一点。长按对话中的俄文可以查词。",15,PaperActivity.muted,false),-2);
+    }
     if(!room.turns.isEmpty() || !room.pending.isEmpty())scrollDown();
+  }
+
+  private void pickEngine() {
+    new FeedbackDialog(a).setTitle("对话使用哪个模型？")
+        .setSingleChoiceItems(new String[]{"手机 AI · 离线","我的 API · 联网"},cloud()?1:0,(d,index)->{
+          d.dismiss();
+          if(index==1 && !CloudAi.configured(a.getPreferences(0),CloudAi.selected(a.getPreferences(0)))) {
+            a.openAiSettings("role_chat");return;
+          }
+          leave();
+          a.getPreferences(0).edit().putBoolean("roleChatCloud",index==1)
+              .putBoolean(LocalLanguageModel.ENABLED,true).apply();
+          a.show("role_chat");
+        }).setNegativeButton("取消",null).show();
   }
 
   void leave() {
@@ -170,7 +210,8 @@ final class RoleChat {
     LinearLayout line=a.box(false);
     line.setGravity(Gravity.CENTER_VERTICAL);
     TextView words=a.txt(text,16,PaperActivity.ink,false);
-    words.setMaxWidth(a.dp(Math.max(130,a.getResources().getConfiguration().screenWidthDp-(mine?108:133))));
+    int window=a.getResources().getConfiguration().screenWidthDp;
+    words.setMaxWidth(a.dp(Math.max(130,Math.min(window>=840?480:680,window)-(mine?108:133))));
     a.selectableWords(words,"role_chat");
     line.addView(words,-2,-2);
     if(!mine && !PhotoText.russianSource(text).isEmpty()) {
@@ -186,10 +227,12 @@ final class RoleChat {
   }
 
   private void send() {
-    if(generating || input==null || !LocalLanguageModel.enabled(a.getPreferences(0)))return;
+    if(generating || input==null || (!cloud() && !LocalLanguageModel.enabled(a.getPreferences(0))))return;
     String message=input.getText().toString().trim();
     if(message.isEmpty())return;
     Role chosen=role;
+    boolean useCloud=cloud();
+    CloudAi.Provider provider=CloudAi.selected(a.getPreferences(0));
     Room room=rooms.get(chosen);
     List<String> history=new ArrayList<>(room.turns);
     room.pending=message;
@@ -205,11 +248,21 @@ final class RoleChat {
       String result="";
       String failure="";
       try {
-        result=LocalLanguageModel.chat(a.getApplicationContext(),chosen.instruction(),history,message)
-            .replaceAll("[\\s\\p{Cntrl}]+"," ").trim();
+        String reviewed=TutorGuide.answer(chosen.name(),message);
+        String grounded=chosen.instruction();
+        if(!useCloud && reviewed.isEmpty())grounded+=a.dictionaryContext(message);
+        result=(!useCloud && !reviewed.isEmpty())?reviewed:(useCloud?CloudAi.chat(a.getPreferences(0),provider,chosen.instruction(),history,message).text
+            :LocalLanguageModel.chat(a.getApplicationContext(),grounded,history,message)).trim();
         if(result.isEmpty() || result.equalsIgnoreCase(message))throw new IOException("没有可用回复");
-      } catch(IOException | RuntimeException error) {
-        failure="这句没有生成。可以试一句短一点的。";
+        if(!useCloud && result.matches("(?s).*[А-Яа-яЁё][\\u4e00-\\u9fff].*"))
+          result="这句先从常用表达练起。\n"+chosen.practice();
+        if(!result.contains("?") && !result.contains("？"))
+          result+="\n"+chosen.practice().substring(chosen.practice().lastIndexOf('\n')+1);
+        if(!result.matches("(?s).*[А-Яа-яЁё]{2,}.*"))
+          result+="\n\n练一句\n"+chosen.practice();
+      } catch(Exception error) {
+        android.util.Log.w("Slovo","Role chat failed",error);
+        failure="这句没有生成，输入已保留。可以重试或切换模型。";
       }
       String reply=result,problem=failure;
       a.ui.post(()->{
@@ -249,6 +302,33 @@ final class RoleChat {
     if(messages==null)return;
     android.widget.ScrollView scroll=a.scroll;
     scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));
+  }
+
+  void fromWord(String word) {
+    leave();role=Role.TUTOR;
+    rooms.get(role).draft="请教我 "+word+" 的意思和用法，并给一句简单俄语例句。";
+    a.show("role_chat");
+  }
+
+  void save(android.os.Bundle state) {
+    if(input!=null)rooms.get(role).draft=input.getText().toString();
+    state.putString("chatRole",role.name());
+    for(Role option:Role.values()) {
+      Room room=rooms.get(option);
+      state.putStringArrayList("chat_"+option.name(),new ArrayList<>(room.turns));
+      state.putString("chatDraft_"+option.name(),room.pending.isEmpty()?room.draft:room.pending);
+    }
+  }
+
+  void restore(android.os.Bundle state) {
+    try { role=Role.valueOf(state.getString("chatRole",Role.CAFE.name())); }
+    catch(IllegalArgumentException ignored) { role=Role.CAFE; }
+    for(Role option:Role.values()) {
+      Room room=rooms.get(option);
+      ArrayList<String> history=state.getStringArrayList("chat_"+option.name());
+      if(history!=null && history.size()%2==0)room.turns.addAll(history);
+      room.draft=state.getString("chatDraft_"+option.name(),"");
+    }
   }
 
   void close() {

@@ -23,6 +23,8 @@ public final class WordActivity extends PaperActivity {
   Lexicon lex;
   StudyStore data;
   Voice voice;
+  private final DictionaryDetails details=new DictionaryDetails(this);
+  private final AppUpdates updates=new AppUpdates(this);
   String screen = "home", query = "", detailFrom = "search", attachKey = "";
   String quoteFrom = "home";
   String labFrom = "home", restoredQuiz = "", bookQuery = "";
@@ -63,6 +65,7 @@ public final class WordActivity extends PaperActivity {
     layout("", false, null, null);
 
     if (state != null) {
+      roleChat.restore(state);
       quoteFrom = state.getString("quoteFrom", "home");
       labFrom = state.getString("labFrom", "home");
       assistantFrom = state.getString("assistantFrom","home");
@@ -140,6 +143,7 @@ public final class WordActivity extends PaperActivity {
   @Override
   public void onSaveInstanceState(Bundle b) {
     super.onSaveInstanceState(b);
+    roleChat.save(b);
     b.putString("screen", screen);
     b.putString("quoteFrom", quoteFrom);
     b.putString("labFrom", labFrom);
@@ -200,12 +204,14 @@ public final class WordActivity extends PaperActivity {
 
   private final class TabPage {
     final LinearLayout page = shell, content = body, header = bar, panel = answerPanel, dock = answerDock;
-    final ScrollView scrolling = scroll;
+    final ScrollView scrolling = scroll, sideScrolling=sideScroll;
+    final LinearLayout sideContent=sideBody;
     final View river = riverPhoto, face = wordFace;
     final int location = place;
     final long created = pageDrawnAt;
     void restore() {
       shell = page; body = content; bar = header; scroll = scrolling;
+      sideScroll=sideScrolling; sideBody=sideContent;
       answerPanel = panel; answerDock = dock; riverPhoto = river; place = location;
       wordFace = face; pageDrawnAt = created;
       page.setVisibility(View.VISIBLE);
@@ -240,6 +246,7 @@ public final class WordActivity extends PaperActivity {
       if (y > 0 && !detailFrom.equals("memory") && !detailFrom.equals("lab"))
         destination.post(() -> destination.scrollTo(0, y));
     }
+    else if (screen.equals("updates")) show("settings");
     else if (screen.equals("appearance")) show("settings");
     else if (screen.equals("reminder_settings")) show("settings");
     else if (screen.equals("keepsakes")) show("quotes");
@@ -320,7 +327,7 @@ public final class WordActivity extends PaperActivity {
             || next.equals("quotes")
             || next.equals("lab") || next.equals("memory") || next.equals("appearance") || next.equals("keepsakes")
             || next.equals("credits") || next.equals("assistant") || next.equals("reminder_settings")
-            || next.equals("role_chat")
+            || next.equals("role_chat") || next.equals("updates")
             || next.startsWith("ai_");
     String name =
         next.equals("home")
@@ -343,6 +350,7 @@ public final class WordActivity extends PaperActivity {
     if (next.equals("ai_settings")) name="AI 与翻译";
     if (next.equals("ai_translate")) name="AI 译句";
     if (next.equals("role_chat")) name="俄语对话";
+    if (next.equals("updates")) name="应用更新";
     if (next.equals("memory")) name = "记忆曲线";
     if (next.equals("appearance")) name = "风景与动效";
     if (next.equals("keepsakes")) name = "收藏的明信片";
@@ -365,6 +373,7 @@ public final class WordActivity extends PaperActivity {
       bar.addView(change, -2, dp(48));
     }
     switch (next) {
+      case "updates": updates.render(); break;
       case "lab":
         if (lab == null) lab = new StudyLab(this);
         lab.render(); break;
@@ -541,7 +550,7 @@ public final class WordActivity extends PaperActivity {
     LinearLayout text = box(true);
     add(text, txt("词汐", 25, ink, true), -2);
     gap(text, 4);
-    add(text, txt("俄语背词  ·  0.8.0", 14, muted, false), -2);
+    add(text, txt("俄语背词  ·  0.9.0", 14, muted, false), -2);
     wide(brand, text);
     add(body, brand, -2);
     section("学习", "");
@@ -565,10 +574,12 @@ public final class WordActivity extends PaperActivity {
         R.drawable.s_book,
         () -> startActivity(new Intent(this, ReaderActivity.class)));
     section("关于", "");
+    row(body,"检查更新","国内加速下载 · GitHub 发布",R.drawable.s_arrow,()->show("updates"));
     add(body,txt("开发者",15,blue,true),-2);
     gap(body,5);
     add(body,txt("小陈同学 · 小余同学",16,ink,false),-2);
     gap(body,10);
+    row(body,"开源许可","语音、词典、模型与素材来源",R.drawable.s_book,this::licenses);
     row(body, "摄影与书目", "风景地点、拍摄者与参考书", R.drawable.s_image, () -> show("credits"));
     row(
         body,
@@ -581,7 +592,7 @@ public final class WordActivity extends PaperActivity {
                 .setMessage(
                     "每册由主题词和分级拓展词组成。中文释义来自中文维基词典贡献者与 Kaikki（CC BY-SA 4.0）。"
                         + "重音参考 OpenRussian，常用度参考 wordfreq。词形参考"
-                        + " OpenCorpora。重音与词形取自 OpenRussian（CC BY-SA 4.0）。核心词内置读音，其他词使用系统俄语语音。")
+                        + " OpenCorpora。重音与词形取自 OpenRussian（CC BY-SA 4.0）。所有俄语词形与整句可用内置 Denis 离线语音，语音引擎为 sherpa-onnx。详细变化表来自 OpenRussian，双语例句来自 Tatoeba。")
                 .setPositiveButton("关闭", null)
                 .show());
     row(
@@ -596,6 +607,38 @@ public final class WordActivity extends PaperActivity {
                 .setPositiveButton("关闭", null)
                 .show());
   }
+
+  private void licenses() {
+    try {
+      String[] files=getAssets().list("notices");
+      new FeedbackDialog(this).setTitle("许可与来源").setItems(files,(dialog,index)->io.execute(()->{
+        try(InputStream input=getAssets().open("notices/"+files[index]);ByteArrayOutputStream output=new ByteArrayOutputStream()) {
+          byte[] buffer=new byte[8192];for(int n;(n=input.read(buffer))!=-1;)output.write(buffer,0,n);
+          String text=new String(output.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+          ui.post(()->{if(!isDestroyed())new FeedbackDialog(this).setTitle(files[index]).setMessage(text).setPositiveButton("关闭",null).show();});
+        } catch(IOException error) { ui.post(()->tip("没有打开这份说明")); }
+      })).setNegativeButton("返回",null).show();
+    } catch(IOException error) { tip("没有打开许可列表"); }
+  }
+
+  String dictionaryContext(String message) {
+    if(!message.matches("[А-Яа-яЁё́-]{3,40}") && !message.matches("(?s).*(意思|用法|怎么|教我|解释).*"))return "";
+    java.util.regex.Matcher token=java.util.regex.Pattern.compile("[А-Яа-яЁё́-]{3,40}").matcher(message);
+    if(!token.find())return "";
+    try {
+      JSONObject result=details.resolve(token.group());
+      if(result==null)return "";
+      JSONObject entry=result.getJSONObject("entry");
+      String context="\n词典参考（围绕这些已收录资料教学，不要添加无依据的词义）："+entry.optString("word")+"，"+entry.optString("aspect")+"。";
+      JSONArray senses=entry.optJSONArray("senses");
+      if(senses!=null)for(int i=0;i<Math.min(3,senses.length());i++)context+=senses.optString(i)+"；";
+      String notes=entry.optString("notes");
+      if(!notes.isEmpty())context+=notes;
+      return context.length()>600?context.substring(0,600):context;
+    } catch(Exception unavailable) { return ""; }
+  }
+
+  void openTutor(String word) { roleChat.fromWord(word); }
 
   void openAiSettings(String from) { ai.open(from); }
 
@@ -923,7 +966,7 @@ public final class WordActivity extends PaperActivity {
     glass(sound, true, () -> voice.play(w.ru));
     head.addView(sound, dp(48), dp(48));
     add(card, head, -2);
-    gap(card, 22);
+    gap(card, tablet()?65:22);
     TextView word = serif(stressed, w.ru.length() > 14 ? 30 : w.ru.length() > 10 ? 36 : 46, white);
     float available=dp(getResources().getConfiguration().screenWidthDp-76);
     float measured=word.getPaint().measureText(stressed);
@@ -944,6 +987,7 @@ public final class WordActivity extends PaperActivity {
               false),
           -2);
     }
+    if(tablet())card.setMinimumHeight(dp(getResources().getConfiguration().screenWidthDp>=840?310:340));
     add(body, card, -2);
     if (advance) arrive(card, 16, 0, 190);
     answerPanel = box(true);
@@ -1027,9 +1071,10 @@ public final class WordActivity extends PaperActivity {
   }
 
   void dock(LinearLayout controls) {
-    pad(controls, 16, 8, 16, 8);
+    int edge=Math.max(16,(getResources().getConfiguration().screenWidthDp-880)/2+16);
+    pad(controls, edge, 8, edge, 8);
     scenicDock(controls);
-    shell.addView(controls, shell.indexOfChild(scroll) + 1, new LinearLayout.LayoutParams(-1, -2));
+    shell.addView(controls, new LinearLayout.LayoutParams(-1, -2));
   }
 
   void usage(LinearLayout host, JSONObject hint) {
@@ -2092,7 +2137,7 @@ public final class WordActivity extends PaperActivity {
               () -> saveWords(Collections.singletonList(w), Collections.emptyList())),
           -2);
     }
-    usage(body, usage);
+    details.render(w);
     if (!lex.core.containsKey(w.k) && !w.pos.equals("自录词")) {
       gap(body, 22);
       add(body, txt("释义来源：中文维基词典贡献者，经 Kaikki 整理。CC BY-SA 4.0。", 12, muted, false), -2);
@@ -2267,6 +2312,18 @@ public final class WordActivity extends PaperActivity {
         });
   }
 
+  @Override public void onConfigurationChanged(android.content.res.Configuration configuration) {
+    super.onConfigurationChanged(configuration);
+    if(data==null)return;
+    int position=scroll==null?0:scroll.getScrollY();
+    if(screen.equals("role_chat"))roleChat.leave();
+    if(searchBox!=null && screen.equals("search"))query=searchBox.getText().toString();
+    onContentAction();
+    show(screen);
+    ScrollView destination=scroll;
+    destination.post(()->destination.scrollTo(0,position));
+  }
+
   @Override
   protected void onStop() {
     onContentAction();
@@ -2276,6 +2333,7 @@ public final class WordActivity extends PaperActivity {
 
   @Override
   protected void onDestroy() {
+    updates.close();
     roleChat.close();
     ai.close();
     assistant.close();
@@ -2285,6 +2343,7 @@ public final class WordActivity extends PaperActivity {
     if (voice != null) voice.close();
     io.execute(
         () -> {
+          details.close();
           if (lex != null) lex.close();
           if (data != null) data.close();
         });

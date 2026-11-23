@@ -7,8 +7,8 @@ import tempfile
 from urllib.request import urlopen
 
 MODEL = (
-    "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/"
-    "9217f5db79a29953eb74d5343926648285ec7e67/qwen2.5-0.5b-instruct-q4_0.gguf"
+    "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/"
+    "50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_K_M.gguf"
 )
 PACK = Path(__file__).with_name("pack_model.py")
 

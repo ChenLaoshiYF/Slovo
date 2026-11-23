@@ -40,7 +40,21 @@ abstract class PaperActivity extends Activity {
   static final PathInterpolator SETTLE = new PathInterpolator(.18f, .78f, .22f, 1f);
   static final PathInterpolator RELEASE = new PathInterpolator(.18f, 1.24f, .30f, 1f);
   ScrollView scroll;
+  ScrollView sideScroll;
+  LinearLayout sideBody;
+  private LinearLayout workspace;
   int place;
+
+  boolean tablet() { return getResources().getConfiguration().screenWidthDp>=600; }
+
+  /** Open a second reading column only when both columns remain comfortable to read. */
+  LinearLayout secondary() {
+    if(getResources().getConfiguration().screenWidthDp<840)return body;
+    workspace.getLayoutParams().width=dp(Math.min(1200,getResources().getConfiguration().screenWidthDp));
+    workspace.requestLayout();
+    sideScroll.setVisibility(View.VISIBLE);
+    return sideBody;
+  }
 
   void touchAction(View v, Runnable action) {
     if (v.getBackground() instanceof FieldArt) {
@@ -83,6 +97,7 @@ abstract class PaperActivity extends Activity {
     scenery.bindGlass(shell.findViewWithTag("scenery.dock"), SceneryPane.DOCK);
     scenery.bindGlass(tabTrack,SceneryPane.TABS);
     scenery.bindGlass(body,SceneryPane.SHEET);
+    if(sideBody!=null && sideScroll.getVisibility()==View.VISIBLE)scenery.bindGlass(sideBody,SceneryPane.SIDE_SHEET);
     android.os.PowerManager power=(android.os.PowerManager)getSystemService(POWER_SERVICE);
     boolean animate=ValueAnimator.areAnimatorsEnabled() && !power.isPowerSaveMode();
     boolean glow=getPreferences(0).getBoolean(SceneryPane.CROSSFADE,false);
@@ -414,13 +429,30 @@ abstract class PaperActivity extends Activity {
     scroll = new ScrollView(this);
     scroll.setFillViewport(false);
     scroll.setVerticalScrollBarEnabled(false);
-    shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+    FrameLayout readingArea=new FrameLayout(this);
+    shell.addView(readingArea,new LinearLayout.LayoutParams(-1,0,1));
+    workspace=box(false);
+    workspace.setGravity(Gravity.TOP);
+    int width=getResources().getConfiguration().screenWidthDp;
+    FrameLayout.LayoutParams columns=new FrameLayout.LayoutParams(tablet()?dp(Math.min(880,width)):-1,-1,Gravity.CENTER_HORIZONTAL);
+    readingArea.addView(workspace,columns);
+    workspace.addView(scroll,new LinearLayout.LayoutParams(0,-1,1));
     body = box(true);
     pad(body,12,3,12,16);
     body.setBackground(TideControls.surface(this,0xe9faf8ef,0xe2f2f3e9,16,0x79ffffff));
     FrameLayout.LayoutParams sheet=new FrameLayout.LayoutParams(-1,-2);
     sheet.setMargins(dp(8),dp(7),dp(8),dp(8));
     scroll.addView(body,sheet);
+    sideScroll=new ScrollView(this);
+    sideScroll.setVerticalScrollBarEnabled(false);
+    sideBody=box(true);
+    pad(sideBody,16,12,16,20);
+    sideBody.setBackground(TideControls.surface(this,0xe9faf8ef,0xe2f2f3e9,16,0x79ffffff));
+    FrameLayout.LayoutParams sideSheet=new FrameLayout.LayoutParams(-1,-2);
+    sideSheet.setMargins(dp(4),dp(7),dp(8),dp(8));
+    sideScroll.addView(sideBody,sideSheet);
+    workspace.addView(sideScroll,new LinearLayout.LayoutParams(0,-1,.85f));
+    sideScroll.setVisibility(View.GONE);
   }
 
   static int tabIndex(String id) {

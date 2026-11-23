@@ -5,7 +5,7 @@ import android.content.*;
 import android.content.res.AssetFileDescriptor;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
-import android.speech.tts.TextToSpeech;
+
 import java.util.*;
 import java.util.concurrent.Executor;
 
@@ -14,29 +14,30 @@ final class Voice {
   final Lexicon lex;
   final Executor lookup;
   MediaPlayer mp;
-  TextToSpeech system;
-  boolean ready, alternate;
-  int generation;
-  private int playback;
+
+
+
   private float rate = 1f;
   private static final Locale RUSSIAN=new Locale("ru","RU");
   private Locale language=RUSSIAN;
-  String waiting;
+
+  final OfflineSpeech offline;
 
   Voice(Activity a, Lexicon lex,Executor lookup) {
     this.a = a;
     this.lex = lex;
     this.lookup=lookup;
+    this.offline=new OfflineSpeech(a);
   }
 
   void stop() {
-    playback++;
-    waiting = null;
+    offline.stop();
+
     if (mp != null) {
       mp.release();
       mp = null;
     }
-    if (system != null && ready) system.stop();
+
   }
 
   void play(String word) {
@@ -52,38 +53,14 @@ final class Voice {
     if(!playRecording(word,speed))synthesize(word);
   }
 
-  private boolean hasRecording(String key) {
-    return lex.supplementalAudio.containsKey(key) || lex.core.containsKey(key);
-  }
-
   void playExtracted(String reported) {
     stop();
     rate=1f;
-    language=RUSSIAN;
     String text=reported.trim();
+    language=text.matches("(?s).*[А-Яа-яЁё].*")?RUSSIAN:
+        text.matches("(?s).*[\\p{IsHan}].*")?Locale.CHINESE:Locale.US;
     if(text.isEmpty() || playRecording(text,1f))return;
-    if(!text.matches("[А-Яа-яЁё́-]+")) {
-      synthesize(text);
-      return;
-    }
-    int request=playback;
-    lookup.execute(()->{
-      String base="";
-      try {
-        for (Lexicon.Word word:lex.search(text,true)) {
-          if(hasRecording(word.k)) { base=word.ru; break; }
-        }
-      } catch(java.io.IOException error) {
-        android.util.Log.w("Slovo","Pronunciation lookup failed",error);
-      }
-      String recorded=base;
-      a.runOnUiThread(()->{
-        if (request!=playback || a.isDestroyed())return;
-        if(recorded.isEmpty() || !playRecording(recorded,1f))synthesize(text);
-        else if(!Lexicon.key(text).equals(Lexicon.key(recorded)))
-          android.widget.Toast.makeText(a,"正在播放原形 · "+recorded,android.widget.Toast.LENGTH_SHORT).show();
-      });
-    });
+    synthesize(text);
   }
 
   void playInLanguage(String text,Locale locale) {
@@ -138,103 +115,13 @@ final class Voice {
   }
 
   private void synthesize(String word) {
-    waiting = word;
-    if (system != null && ready) {
-      speak();
-      return;
-    }
-    if (system == null) init(false);
-    else if (!ready)
-      android.widget.Toast.makeText(a, "正在准备系统俄语声音", android.widget.Toast.LENGTH_SHORT).show();
-  }
-
-  void init(boolean useAlternate) {
-    alternate = useAlternate;
-    ready = false;
-    final int request = ++generation;
-    TextToSpeech.OnInitListener listener =
-        status ->
-            a.getWindow()
-                .getDecorView()
-                .post(
-                    () -> {
-                      if (a.isDestroyed() || request != generation) return;
-                      ready = status == TextToSpeech.SUCCESS;
-                      if (ready) speak();
-                      else fallback();
-                    });
-    system =
-        useAlternate
-            ? new TextToSpeech(a, listener, "com.reecedunn.espeak")
-            : new TextToSpeech(a, listener);
-  }
-
-  void fallback() {
-    if (!alternate) {
-      Intent intent =
-          new Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE)
-              .setPackage("com.reecedunn.espeak");
-      if (!a.getPackageManager().queryIntentServices(intent, 0).isEmpty()) {
-        if (system != null) system.shutdown();
-        init(true);
-        return;
-      }
-    }
-    if (system != null) {
-      system.shutdown();
-      system = null;
-    }
-    ready = false;
-    missing();
-  }
-
-  void speak() {
-    if (waiting == null) return;
-    if (system.setLanguage(language) < 0) {
-      fallback();
-      return;
-    }
-    system.setSpeechRate(.87f * rate);
-    if (system.speak(waiting, TextToSpeech.QUEUE_FLUSH, null, "slovo-word") == TextToSpeech.ERROR) {
-      fallback();
-      return;
-    }
-    waiting = null;
-  }
-
-  void missing() {
-    if (waiting == null) return;
-    waiting = null;
-    if (a.isFinishing()) return;
-    String label=language.equals(RUSSIAN)?"俄语":language.equals(Locale.US)?"英语":"中文";
-    new FeedbackDialog(a)
-        .setTitle("缺少"+label+"语音")
-        .setMessage("在安卓文字转语音设置中安装"+label+"声音，再回来试听。")
-        .setNegativeButton("返回", null)
-        .setPositiveButton(
-            "语音设置",
-            (d, w) -> {
-              try {
-                Intent install =
-                    new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
-                        .setPackage("com.reecedunn.espeak");
-                if (install.resolveActivity(a.getPackageManager()) != null) {
-                  a.startActivity(install);
-                  return;
-                }
-                a.startActivity(new Intent("com.android.settings.TTS_SETTINGS"));
-              } catch (Exception e) {
-                android.widget.Toast.makeText(
-                        a, "请在系统设置中搜索“文字转语音”", android.widget.Toast.LENGTH_LONG)
-                    .show();
-              }
-            })
-        .show();
+    String locale=word.matches("(?s).*[А-Яа-яЁё].*")?"ru":language.getLanguage();
+    offline.speak(word,rate,locale,()->android.widget.Toast.makeText(a,
+        "这次朗读未完成，请再点一次",android.widget.Toast.LENGTH_SHORT).show());
   }
 
   void close() {
-    generation++;
     stop();
-    if (system != null) system.shutdown();
+    offline.close();
   }
 }

@@ -110,6 +110,13 @@ final class Lexicon {
         if (!stress.isEmpty()) usage.put(key, new JSONObject().put("stress", stress));
       }
     }
+    try (BufferedReader reader=new BufferedReader(new InputStreamReader(c.getAssets().open("dictionary-shortcuts.json"),StandardCharsets.UTF_8))) {
+      JSONObject extra=new JSONObject(reader.readLine());
+      for(Iterator<String> it=extra.keys();it.hasNext();) {
+        String key=it.next();JSONArray values=extra.getJSONArray(key);
+        supplements.putIfAbsent(key,new Word(key,values.getString(0),values.getString(1),values.getString(2)));
+      }
+    }
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(
         c.getAssets().open("voices-supplements.tsv"), StandardCharsets.UTF_8))) {
       for (String row; (row = reader.readLine()) != null; ) {

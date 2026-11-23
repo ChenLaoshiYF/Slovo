@@ -7,4 +7,5 @@ local.properties
 *.hprof
 *.apk
 __pycache__/
+.speech-source/
 app/src/main/assets/ai/qwen-q4.part*

@@ -1,18 +1,21 @@
-词汐 0.7.0 端侧模型和外部服务
+词汐 0.9.0 端侧模型和外部服务
 
-Qwen2.5-0.5B-Instruct-GGUF，Q4_0，Apache 2.0
-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF
-版本 9217f5db79a29953eb74d5343926648285ec7e67
-文件 qwen2.5-0.5b-instruct-q4_0.gguf
-SHA-256 7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed
-模型由 Qwen 团队发布，词汐仅分片打包，首次使用时还原。内置权重不上云。
+Qwen3-0.6B，Unsloth Q4_K_M 量化，Apache-2.0。
+模型原版 https://huggingface.co/Qwen/Qwen3-0.6B
+量化 https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/tree/50968a4468ef4233ed78cd7c3de230dd1d61a56b
+文件 Qwen3-0.6B-Q4_K_M.gguf，396,705,472 字节。
+SHA-256 ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a
+词汐分成八片随包提供，首次使用时还原。非思考模式，1536 token 上下文，按需加载。自由生成仍可能出错，常用场景由原创校订课卡辅助。
 
-llama.cpp b7371，MIT
+llama.cpp b7371，MIT。
 https://github.com/ggml-org/llama.cpp/tree/b7371
-使用 Android NDK r27c 编译，提供 arm64-v8a、armeabi-v7a 和 x86_64 本地 CPU 推理。
-工程内保留词汐 JNI 和构建脚本，上游源码可由上述版本下载。
+使用 Android NDK r27c 编译，提供 arm64-v8a、armeabi-v7a 和 x86_64 CPU 推理。
+JNI 和构建脚本在工程中，上游源码可由固定版本下载。
 
-使用自带 API 时的接口和额度说明
+自带 API 的接口和额度说明
 https://api-docs.deepseek.com/api/get-user-balance/
 https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope
 https://developers.openai.com/api/reference/resources/chat
+
+联网对话只在用户选择自己的 API 并发送时，提交该角色的最近对话。应用不附带公共 API 密钥。
+应用更新使用 GitHub 发布。国内加速服务来自 https://gh-proxy.org/，不发送学习记录或密钥。

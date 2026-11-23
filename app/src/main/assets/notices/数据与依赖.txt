@@ -1,0 +1,53 @@
+词汐 0.7.0 数据与第三方来源
+
+本项目独立分级编排 21 册学习词库，每册 355–3,240 词，合计 19,510 个词库条目。按词去重 7,219 个，均含Piper Denis 俄语合成读音。仅提供自编学习词表，教材逐课词表和官方考试大纲另见各自出版物。
+
+扩展俄汉词典含 86,111 个归一化检索键。原始页面来自中文维基词典贡献者，可用 https://zh.wiktionary.org/wiki/词目 替换词目查看页面和贡献历史。机器可读提取来自 Tatu Ylonen、Kaikki 与 Wiktextract。
+https://kaikki.org/zhwiktionary/%E4%BF%84%E8%AF%AD/index.html
+https://github.com/tatuylonen/wiktextract
+处理包括选取俄语条目、中文释义截取、繁简转换、索引和轻量 SQLite 打包。维基词典派生词典数据以 CC BY-SA 4.0 提供。原有标注、来源与适用的上游许可继续有效。
+https://creativecommons.org/licenses/by-sa/4.0/
+
+原有学习词库的词形索引使用 pymorphy3 和 OpenCorpora 俄语形态词典，并加入维基词典已有词形。OpenCorpora 原始字典许可为 CC BY-SA 3.0，具体生成代码见 tools/prepare_dictionary.py。
+https://opencorpora.org/dict.php
+https://github.com/no-plagiarism/pymorphy3
+https://creativecommons.org/licenses/by-sa/3.0/
+词条简繁处理使用 OpenCC。Python 与上述制表库仅在开发电脑准备数据时使用。处理后的词典为 app/src/main/assets/lexicon.bin，可使用 gzip 解压得到标准 SQLite 文件。
+
+俄文图片识别采用 Tesseract4Android 4.9.0 单线程版本、Tesseract、Leptonica 和俄语、简体中文、英语 LSTM 快速模型；应用仅在提取图片中的词时初始化模型。
+https://github.com/adaptech-cz/Tesseract4Android
+https://github.com/tesseract-ocr/tesseract
+https://github.com/tesseract-ocr/tessdata_fast
+https://github.com/DanBloomberg/leptonica
+随仓库保留第三方许可文本。安卓发音优先使用词库内置音频，扩展词调用系统文字转语音服务。可选 eSpeak 引擎独立安装，未包含在本 APK 中。
+https://f-droid.org/packages/com.reecedunn.espeak/
+
+个人复习模型借鉴半衰期回归的思想，预测、特征、在线调整、排期和三维展示均由本项目实现。没有使用该论文的学习者训练数据或训练权重。
+https://aclanthology.org/P16-1174/
+
+课堂听读是已保留的扩展。课堂制课工具使用的模型和第三方 Python 库未随词汐 APK 分发；若独立使用制课脚本，请按对应许可准备模型。
+https://huggingface.co/facebook/nllb-200-distilled-600M
+Gradle Wrapper 以 Apache License 2.0 提供。
+https://github.com/gradle/gradle/blob/master/LICENSE
+
+
+重音与常见屈折形式取自 OpenRussian 及其贡献者的 russian-dictionary 公开数据，以 CC BY-SA 4.0 分发。项目提取了核心词的重音，将撇号标记转换为组合重音符号，并为选定的格、性或人称添加中文说明。30 个俄汉例句由本项目编写。数据加工见 tools/prepare_clues.py。
+https://github.com/Badestrand/russian-dictionary
+https://creativecommons.org/licenses/by-sa/4.0/
+
+词频分层使用 wordfreq 3.1.1。仅用其量化词频来排序，未分发原库或原始语料。
+https://github.com/rspeer/wordfreq
+OpenRussian 词目及重音衍生数据以 CC BY-SA 4.0 提供。
+https://en.openrussian.org/dictionary-data
+
+内置译文共 11,219 条，来自 Tatoeba 作者的直接链接译对及本项目编写的 26 条。Tatoeba 语料按 CC BY 2.0 FR 提供。资产 photo_sentences.json 的第二、第三列为原文和译文编号，非零号可代入 https://tatoeba.org/en/sentences/show/编号 查看原句、译文、作者及许可。俄文匹配键转小写、统一空白及重音后用于精确检索；译文保留导出文本。
+https://tatoeba.org/en/downloads
+https://creativecommons.org/licenses/by/2.0/fr/
+
+俄语单词和常见句使用包内材料。陌生整句可运行包内 Qwen 模型，也可在明确选择联网翻译时调用 MyMemory。MyMemory 只接收待译俄语文本。
+https://mymemory.translated.net/doc/spec.php
+
+手机端生成模型、JNI 和 API 服务见「端侧模型和服务.txt」。
+
+公开版俄语读音由 Piper 的 ru_RU-denis-medium 离线生成。模型仓库标为 MIT，Denis 数据集在模型卡标为 CC0。发行包包含生成的 MP3。
+https://huggingface.co/rhasspy/piper-voices/blob/v1.0.0/ru/ru_RU/denis/medium/MODEL_CARD

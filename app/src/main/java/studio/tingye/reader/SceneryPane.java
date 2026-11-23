@@ -17,7 +17,7 @@ import java.util.concurrent.Executors;
 
 /** A cover-cropped photograph shared by the page and its stationary glass surfaces. */
 final class SceneryPane extends View {
-  static final int DOCK = 1, HEADER = 2, TABS=3, SHEET=4;
+  static final int DOCK = 1, HEADER = 2, TABS=3, SHEET=4, SIDE_SHEET=5;
   static final String CROSSFADE = "sceneryCrossfade";
   private static final ExecutorService LOADER = Executors.newSingleThreadExecutor(r -> {
     Thread thread = new Thread(r, "Landscape photographs");
@@ -34,7 +34,7 @@ final class SceneryPane extends View {
   private final RectF target = new RectF();
   private final int[] origin = new int[2];
   private final Bitmap[] textures = new Bitmap[2];
-  private final View[] surfaces=new View[5];
+  private final View[] surfaces=new View[6];
   private View card;
   private TextView location,cardLocation;
   private Bitmap[] previous;
@@ -264,11 +264,11 @@ final class SceneryPane extends View {
       if(level==TABS||level==DOCK)panel.inset(8*dp,level==DOCK?2*dp:4*dp);
       if(panel.width()<=0||panel.height()<=0)return;
       SoftCorners.trace(clip,panel.left,panel.top,panel.right,panel.bottom,
-          level==HEADER?0:(level==SHEET?21:23)*dp);
+          level==HEADER?0:((level==SHEET||level==SIDE_SHEET)?21:23)*dp);
       int[] colors;
       if(level==HEADER) colors=new int[]{0xf3fafbf3,0xdef1f6eb,0x72e9f3e9};
       else if(level==TABS) colors=new int[]{0xd0f9faef,0xbcecf4e8,0xe3f2f5ec};
-      else if(level==SHEET) colors=new int[]{0xd5faf9f0,0xc6f6f6ed,0xcbf1f4ea};
+      else if((level==SHEET||level==SIDE_SHEET)) colors=new int[]{0xd5faf9f0,0xc6f6f6ed,0xcbf1f4ea};
       else colors=new int[]{0x84fbfcf2,0xa6e7f0e5,0xc5f3f6ed};
       tint=level==HEADER
           ? new LinearGradient(panel.left,panel.top,panel.right,panel.top,colors,
