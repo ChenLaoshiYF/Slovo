@@ -68,7 +68,7 @@ final class StudyStore extends SQLiteOpenHelper {
   final Lexicon lex;
 
   StudyStore(Context c, Lexicon lex) throws JSONException {
-    super(c, "slovo-study.db", null, 3);
+    super(c, "slovo-study.db", null, 4);
     this.lex = lex;
     setWriteAheadLoggingEnabled(true);
     try (Cursor cur =
@@ -128,6 +128,7 @@ final class StudyStore extends SQLiteOpenHelper {
     d.execSQL("create table activity(day text,k text,n integer,primary key(day,k))");
     createShelf(d);
     createLog(d);
+    createChat(d);
   }
 
   @Override
@@ -139,6 +140,42 @@ final class StudyStore extends SQLiteOpenHelper {
               + " note<>'' or image<>''");
     }
     if (a < 3) createLog(d);
+    if (a < 4) createChat(d);
+  }
+
+  static void createChat(SQLiteDatabase db) {
+    db.execSQL("create table chat_practice(id integer primary key, task text not null, words text not null, at integer not null)");
+  }
+
+  void clearChat() { getWritableDatabase().delete("chat_practice",null,null); }
+
+  void recordChat(String task,Set<String> words) {
+    SQLiteDatabase db=getWritableDatabase();
+    db.beginTransaction();
+    try {
+      db.execSQL("insert into chat_practice(task,words,at) values(?,?,?)",
+          new Object[]{task,String.join(" ",words),System.currentTimeMillis()});
+      db.execSQL("delete from chat_practice where id <= (select max(id)-256 from chat_practice)");
+      db.setTransactionSuccessful();
+    } finally { db.endTransaction(); }
+  }
+
+  Map<String,Double> interests() {
+    Map<String,Double> scores=new HashMap<>();
+    long now=System.currentTimeMillis();
+    try(Cursor c=getReadableDatabase().rawQuery("select words,at from chat_practice",null)) {
+      while(c.moveToNext()) {
+        double weight=Math.pow(.5,Math.max(0,now-c.getLong(1))/(14.0*MemoryModel.DAY));
+        for(String token:c.getString(0).split(" "))if(!token.isEmpty())scores.merge(token,weight,Double::sum);
+      }
+    }
+    return scores;
+  }
+
+  int[] chatHabits() {
+    try(Cursor c=getReadableDatabase().rawQuery("select count(distinct task),count(*),count(distinct date(at/1000,'unixepoch','localtime')) from chat_practice",null)) {
+      c.moveToFirst();return new int[]{c.getInt(0),c.getInt(1),c.getInt(2)};
+    }
   }
 
   static void createLog(SQLiteDatabase d) {
@@ -326,14 +363,25 @@ final class StudyStore extends SQLiteOpenHelper {
     int limit = Math.min(NEW_PER_ROUND,Math.max(0,goal-todayNew()));
     List<String> book = lex.book(plan).words;
     Set<String> keys = new HashSet<>(book);
+    Map<String,Double> interests=interests();
+    if(!interests.isEmpty()) {
+      List<String> related=new ArrayList<>(interests.keySet());
+      related.sort(Comparator.<String>comparingDouble(interests::get).reversed().thenComparing(k->k));
+      for(String k:related) {
+        Card card=cards.get(k);
+        if(limit>0 && keys.contains(k) && (card==null || card.seen==0)) {
+          session.queue.add(k);limit--;
+        }
+      }
+    }
     for (Card c : all)
-      if (c.seen == 0 && limit > 0 && keys.contains(c.k)) {
+      if (!session.queue.contains(c.k) && c.seen == 0 && limit > 0 && keys.contains(c.k)) {
         session.queue.add(c.k);
         limit--;
       }
     for (String k : book) {
       if (limit == 0) break;
-      if (!cards.containsKey(k)) {
+      if (!cards.containsKey(k) && !session.queue.contains(k)) {
         session.queue.add(k);
         limit--;
       }

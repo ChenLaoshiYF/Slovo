@@ -25,7 +25,7 @@ public final class WordActivity extends PaperActivity {
   Voice voice;
   private final DictionaryDetails details=new DictionaryDetails(this);
   private final AppUpdates updates=new AppUpdates(this);
-  String screen = "home", query = "", detailFrom = "search", attachKey = "";
+  String screen = "role_chat", query = "", detailFrom = "search", attachKey = "";
   String quoteFrom = "home";
   String labFrom = "home", restoredQuiz = "", bookQuery = "";
   int restoredAnswer = -1, detailScroll, bookFilter;
@@ -200,29 +200,6 @@ public final class WordActivity extends PaperActivity {
   private PhotoTransition riverMotion;
   private boolean switchingTab;
   private long pageDrawnAt;
-  private final Map<String, TabPage> savedTabs = new HashMap<>();
-
-  private final class TabPage {
-    final LinearLayout page = shell, content = body, header = bar, panel = answerPanel, dock = answerDock;
-    final ScrollView scrolling = scroll, sideScrolling=sideScroll;
-    final LinearLayout sideContent=sideBody;
-    final View river = riverPhoto, face = wordFace;
-    final int location = place;
-    final long created = pageDrawnAt;
-    void restore() {
-      shell = page; body = content; bar = header; scroll = scrolling;
-      sideScroll=sideScrolling; sideBody=sideContent;
-      answerPanel = panel; answerDock = dock; riverPhoto = river; place = location;
-      wordFace = face; pageDrawnAt = created;
-      page.setVisibility(View.VISIBLE);
-      page.bringToFront();
-    }
-  }
-
-  @Override void onContentAction() {
-    for (TabPage tab : savedTabs.values()) stage.removeView(tab.page);
-    savedTabs.clear();
-  }
 
   private void navigateTab(String id) {
     switchingTab = true;
@@ -253,7 +230,7 @@ public final class WordActivity extends PaperActivity {
     else if (screen.equals("lab")) { if (!lab.back()) show(labFrom); }
     else if (screen.equals("assistant")) show(assistantFrom);
     else if (screen.equals("ai_translate")) show("assistant");
-    else if (screen.equals("role_chat")) show("atlas");
+    else if (screen.equals("role_chat")) super.onBackPressed();
     else if (screen.equals("ai_settings")) ai.back();
     else if (screen.equals("memory")) { if (!memory.back()) show("atlas"); }
     else if (screen.equals("settings") || screen.equals("portrait")) show("atlas");
@@ -292,28 +269,6 @@ public final class WordActivity extends PaperActivity {
     if (acrossRiver && riverMotion == null) riverMotion = new PhotoTransition(stage);
     RectF oldRiver = acrossRiver ? riverMotion.capture(riverPhoto) : null;
     if (riverMotion != null) riverMotion.cancel();
-    if (switchingTab && tabIndex(from) >= 0 && !from.equals("home")
-        && (!from.equals("search") || (query.isEmpty() && !scanning && photoText.text.isEmpty()))) {
-      scroll.animate().cancel();
-      scroll.setTranslationX(0); scroll.setTranslationY(0);
-      savedTabs.put(from, new TabPage());
-      shell.setVisibility(View.INVISIBLE);
-    }
-    TabPage cached = savedTabs.remove(next);
-    if (cached != null) {
-      if (SystemClock.elapsedRealtime() - cached.created < 20000) {
-        if (shell.getVisibility() != View.INVISIBLE) stage.removeView(shell);
-        screen = next;
-        cached.restore();
-        if (next.equals("search")) observeSearchKeyboard();
-        if (next.equals("atlas")) assistant.refreshReminder();
-        tabs(next, this::navigateTab);
-        finishTheme(next);
-        arrive(scroll, Integer.signum(tabIndex(next) - tabIndex(from)) * 7, 0, 240);
-        return;
-      }
-      stage.removeView(cached.page);
-    }
     pageDrawnAt = SystemClock.elapsedRealtime();
     riverPhoto = null;
     screen = next;
@@ -327,7 +282,7 @@ public final class WordActivity extends PaperActivity {
             || next.equals("quotes")
             || next.equals("lab") || next.equals("memory") || next.equals("appearance") || next.equals("keepsakes")
             || next.equals("credits") || next.equals("assistant") || next.equals("reminder_settings")
-            || next.equals("role_chat") || next.equals("updates")
+            || next.equals("updates")
             || next.startsWith("ai_");
     String name =
         next.equals("home")
@@ -564,6 +519,9 @@ public final class WordActivity extends PaperActivity {
     row(body, "风景与动效", "随页面和词卡换景，或固定一处实景", R.drawable.s_image, notebook::openAppearance);
     section("画质", "");
     settingSwitch("风景柔光","在淡入淡出上加一层短暂的柔光",SceneryPane.CROSSFADE);
+    settingSwitch("暂停对话学习记录","只在本机保留每轮练习的词和任务，用来调整荐词和粒子像","pauseChatLearning");
+    row(body,"清空对话学习记录","保留原有背词进度",R.drawable.s_book,()->new FeedbackDialog(this).setTitle("清空对话学习记录？")
+      .setNegativeButton("取消",null).setPositiveButton("清空",(d,i)->{io.execute(()->{data.clearChat();ui.post(()->tip("已清空"));});}).show());
     settingSwitch("粒子高画质","提高个人粒子像的密度、清晰度和帧率",ParticlePortrait.HIGH_QUALITY);
     section("扩展", "");
     row(body,"AI 与翻译","手机模型与自带密钥",R.drawable.s_gear,()->openAiSettings("settings"));
@@ -636,6 +594,25 @@ public final class WordActivity extends PaperActivity {
       if(!notes.isEmpty())context+=notes;
       return context.length()>600?context.substring(0,600):context;
     } catch(Exception unavailable) { return ""; }
+  }
+
+  void learnFromChat(String task,String message,String reply) {
+    if(getPreferences(0).getBoolean("pauseChatLearning",false))return;
+    java.util.Set<String> keys=new LinkedHashSet<>();
+    // Fold inflections on the dictionary worker. Prefer the learner’s own vocabulary.
+    io.execute(()->{
+      for(String token:new PhotoText(message+" "+reply).russianWords) {
+        if(keys.size()>=24)break;
+        String key=Lexicon.key(token);
+        try {
+          JSONObject found=details.resolve(key);
+          if(found==null)continue;
+          key=Lexicon.key(found.getJSONObject("entry").optString("word",key));
+          if(key.length()>2)keys.add(key);
+        } catch(Exception ignored) {}
+      }
+      if(!isDestroyed() && !getPreferences(0).getBoolean("pauseChatLearning",false))data.recordChat(task,keys);
+    });
   }
 
   void openTutor(String word) { roleChat.fromWord(word); }
@@ -771,7 +748,14 @@ public final class WordActivity extends PaperActivity {
     picker.setSelection(shelfSeries);
     add(body, picker, 50);
     LinearLayout catalog = box(true);
-    add(body, catalog, -2);
+    LinearLayout library=secondary();
+    if(library!=body) {
+      Lexicon.Book current=lex.book(data.plan);
+      section("正在学","");
+      add(body,serif(current.title,23,ink),-2);
+      add(body,action("继续斩词",R.drawable.s_arrow,true,()->show("home")),-2);
+    }
+    add(library, catalog, -2);
     shelfBooks(catalog, groups[shelfSeries], groups, labels);
     picker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
       @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view,
@@ -991,7 +975,7 @@ public final class WordActivity extends PaperActivity {
     add(body, card, -2);
     if (advance) arrive(card, 16, 0, 190);
     answerPanel = box(true);
-    add(body, answerPanel, -2);
+    add(secondary(), answerPanel, -2);
     answerDock = box(false);
     dock(answerDock);
     wordFace = card;
@@ -1004,7 +988,7 @@ public final class WordActivity extends PaperActivity {
     wordFace.setClickable(answer == -1);
     if (answer == -1) {
       row(answerPanel,"学习助手","按可用时间安排今天的词",R.drawable.s_orb,()->openAssistant("home"));
-      quoteTeaser(answerPanel);
+
       row(answerPanel, "专项练习", "听音、拼写与词形", R.drawable.s_book, () -> openLab("home"));
       wide(buttons, answerAction("看选项", false, () -> reveal(-2)));
       gap(buttons, 6);
@@ -1071,7 +1055,7 @@ public final class WordActivity extends PaperActivity {
   }
 
   void dock(LinearLayout controls) {
-    int edge=Math.max(16,(getResources().getConfiguration().screenWidthDp-880)/2+16);
+    int edge=16;
     pad(controls, edge, 8, edge, 8);
     scenicDock(controls);
     shell.addView(controls, new LinearLayout.LayoutParams(-1, -2));
@@ -1209,7 +1193,7 @@ public final class WordActivity extends PaperActivity {
     wide(photoTools, action("从相册选", R.drawable.s_image, false, () -> pick(PHOTO)));
     add(body, photoTools, -2);
     matches = box(true);
-    add(body, matches, -2);
+    add(secondary(), matches, -2);
     searchBox.addTextChangedListener(
         new TextWatcher() {
           public void beforeTextChanged(CharSequence s, int st, int n, int a) {}
@@ -1786,14 +1770,15 @@ public final class WordActivity extends PaperActivity {
     boolean personal = getPreferences(0).getBoolean("postcardPersonal", false);
     String[] q = Postcards.entry(personal, quoteIndex(), data);
     LinearLayout note = box(true);
-    click(note, paper, 3, 0, () -> openQuotes("home"));
-    pad(note, 2, 13, 2, 10);
+    landscape(note, getPreferences(0).getInt("quotePlace", 4), FieldArt.LIGHT, 14);
+    touchAction(note, () -> openQuotes("atlas"));
+    pad(note, 14, 13, 14, 10);
     LinearLayout top = box(false);
     wide(top, txt("俄语明信片", 14, blue, true));
     sym(top, R.drawable.s_arrow, blue, 16);
     add(note, top, -2);
     gap(note, 6);
-    TextView excerpt = serif(q[0], 19, ink);
+    TextView excerpt = serif(getPreferences(0).getString("quoteText",q[0]), 19, ink);
     excerpt.setMaxLines(2);
     excerpt.setEllipsize(TextUtils.TruncateAt.END);
     add(note, excerpt, -2);
@@ -1839,7 +1824,7 @@ public final class WordActivity extends PaperActivity {
             () -> {
               getPreferences(0)
                   .edit()
-                  .putInt("postcardVariation", getPreferences(0).getInt("postcardVariation", 0) + 1)
+                  .remove("quoteText").putInt("postcardVariation", getPreferences(0).getInt("postcardVariation", 0) + 1)
                   .apply();
               int next = quoteIndex();
               int land = personal ? Math.floorMod(next, FieldArt.LAND.length)
@@ -1847,13 +1832,30 @@ public final class WordActivity extends PaperActivity {
               fillPostcard(panel, personal, next, land);
               arrive(panel, 0, 8, 190);
             }));
+    add(body,action("编辑文字",0,false,()->{
+      EditText field=new EditText(this);
+      field.setMaxLines(4);
+      field.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(240)});
+      field.setText(getPreferences(0).getString("quoteText",Postcards.entry(personal,quoteIndex(),data)[0]));
+      new FeedbackDialog(this).setTitle("我的明信片").setView(field).setNegativeButton("取消",null)
+        .setPositiveButton("保存",(d,v)->{
+          String text=field.getText().toString().trim();
+          if(text.isEmpty())getPreferences(0).edit().remove("quoteText").apply();
+          else getPreferences(0).edit().putString("quoteText",text).apply();
+          show("quotes");
+        }).show();
+    }),-2);
+    add(body,action("更换风景",0,false,()->new FeedbackDialog(this).setTitle("明信片背景")
+        .setItems(FieldArt.PLACES,(d,i)->{getPreferences(0).edit().putInt("quotePlace",i).apply(); show("quotes");}).show()),-2);
     dock(buttons);
   }
 
   private void fillPostcard(LinearLayout panel, boolean personal, int index, int location) {
     panel.removeAllViews();
+    location=getPreferences(0).getInt("quotePlace",location);
     photoStrip(panel, location, 153);
     String[] entry = Postcards.entry(personal, index, data);
+    if(getPreferences(0).contains("quoteText")) entry=new String[]{getPreferences(0).getString("quoteText",""),"","我的明信片"};
     gap(panel, 16);
     add(panel, serif(entry[0], 25, ink), -2);
     gap(panel, 9);
@@ -1888,7 +1890,7 @@ public final class WordActivity extends PaperActivity {
     gap(body, 9);
     add(body, txt("滑动旋转，点亮点看单词。", 14, muted, false), -2);
     section("我的偏好", "");
-    add(body, txt("你选的偏好，加上学过的词、重练次数和练习日，决定粒子的位置和流速。", 14, muted, false), -2);
+    add(body, txt("学过的词、练过的对话类型、对话轮数和活跃天数，都会改变粒子的分布和流速。", 14, muted, false), -2);
     for (int i = 0; i < 3; i++) {
       final int axis = i;
       LinearLayout r = box(false);
@@ -1991,7 +1993,18 @@ public final class WordActivity extends PaperActivity {
     touchAction(entry, () -> show("portrait"));
     add(body, entry, -2);
     gap(body, 12);
-    row(body, "俄语明信片", "读诗，或给今天的自己写一句", R.drawable.s_book, () -> openQuotes("atlas"));
+    LinearLayout journal=secondary();
+    quoteTeaser(journal);
+    Map<String,Double> interests=data.interests();
+    if(!interests.isEmpty()){
+      gap(journal,14);
+      add(journal,txt("最近聊到的词",18,blue,true),-2);
+      List<String> ranked=new ArrayList<>(interests.keySet());
+      ranked.sort(Comparator.<String>comparingDouble(interests::get).reversed().thenComparing(k->k));
+      for(String key:ranked.subList(0,Math.min(5,ranked.size()))){
+        row(journal,key,"查看词条",R.drawable.s_book,()->lookupSelection(key,"atlas"));
+      }
+    }
     row(body, "俄语对话", "用离线模型练真实场景", R.drawable.s_orb, () -> show("role_chat"));
     ArrayList<StudyStore.Card> list = new ArrayList<>(data.cards.values());
     list.sort((a, b) -> Long.compare(b.last, a.last));
@@ -2065,6 +2078,7 @@ public final class WordActivity extends PaperActivity {
     landscape(definition, place, FieldArt.LIGHT, 12);
     pad(definition, 14, 13, 14, 13);
     add(body, definition, -2);
+    add(body,txt("谐音助记 · "+SoundHint.forWord(w.ru)+"（近似音，以录音为准）",14,muted,false),-2);
     gap(body, 18);
     LinearLayout listening = box(false);
     wide(listening, action("听发音", R.drawable.s_audio, true, () -> voice.play(w.ru)));
@@ -2351,3 +2365,4 @@ public final class WordActivity extends PaperActivity {
     super.onDestroy();
   }
 }
+

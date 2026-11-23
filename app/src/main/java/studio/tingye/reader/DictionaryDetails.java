@@ -104,6 +104,7 @@ final class DictionaryDetails {
       text(main,result.optString("formLabel"),15);
       if(!result.optString("ipa").isEmpty())text(main,result.optString("ipa"),16);
       a.gap(main,8);
+      if(!Lexicon.key(lemma).equals(original.k)) a.add(main,a.action("查看原形 · "+stress,R.drawable.s_arrow,true,()->lookup(lemma)),-2);
       a.add(main,a.action("听原形 · "+stress,R.drawable.s_audio,false,()->a.voice.play(lemma)),-2);
     } else if(!e.optString("ipa").isEmpty())text(main,e.optString("ipa"),16);
     String grammar=String.join("  ·  ",new String[]{e.optString("pos"),e.optString("aspect"),e.optString("gender"),e.optString("animate")})

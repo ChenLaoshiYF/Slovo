@@ -12,6 +12,7 @@ std::mutex engine_lock;
 std::once_flag initialized;
 std::atomic<bool> interrupted{false};
 llama_model *model = nullptr;
+llama_adapter_lora *translation = nullptr;
 
 bool stop_requested(void *) {
     return interrupted.load(std::memory_order_relaxed);
@@ -33,7 +34,7 @@ std::string bytes_from(JNIEnv *env, jbyteArray array) {
 
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_studio_tingye_reader_LocalLanguageModel_infer(JNIEnv *env, jclass, jbyteArray asset,
-                                                   jbyteArray input, jint threads, jint limit) {
+                                                   jbyteArray input, jint threads, jint limit, jbyteArray adapter) {
     std::lock_guard<std::mutex> guard(engine_lock);
     interrupted.store(false, std::memory_order_relaxed);
     std::call_once(initialized, [] {
@@ -63,12 +64,23 @@ Java_studio_tingye_reader_LocalLanguageModel_infer(JNIEnv *env, jclass, jbyteArr
     parameters.abort_callback = stop_requested;
     llama_context *context = llama_init_from_model(model, parameters);
     if (!context) return nullptr;
+    if (adapter) {
+        if (!translation) translation = llama_adapter_lora_init(model, bytes_from(env,adapter).c_str());
+        if (!translation || llama_set_adapter_lora(context,translation,1.0f) != 0) {
+            llama_free(context);
+            return nullptr;
+        }
+    }
     llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    if (adapter) {
+        llama_sampler_chain_add(sampler,llama_sampler_init_greedy());
+    } else {
     llama_sampler_chain_add(sampler, llama_sampler_init_penalties(128, 1.08f, 0.0f, 0.2f));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(20));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.8f, 1));
     llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.4f));
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    }
     std::string answer;
     int status = llama_decode(context, llama_batch_get_one(tokens.data(), count));
     for (int step = 0; status == 0 && step < limit && !stop_requested(nullptr); ++step) {
@@ -96,6 +108,8 @@ Java_studio_tingye_reader_LocalLanguageModel_interrupt(JNIEnv *, jclass) {
 extern "C" JNIEXPORT void JNICALL
 Java_studio_tingye_reader_LocalLanguageModel_release(JNIEnv *, jclass) {
     std::lock_guard<std::mutex> guard(engine_lock);
+    if (translation) llama_adapter_lora_free(translation);
+    translation = nullptr;
     if (model) llama_model_free(model);
     model = nullptr;
 }

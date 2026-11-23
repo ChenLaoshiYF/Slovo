@@ -34,9 +34,9 @@ abstract class PaperActivity extends Activity {
   private FrameLayout tabTrack;
   private View indicator, tabBorder;
   private int activeTab = -1;
-  private final ImageView[] tabIcons = new ImageView[4];
-  private final TextView[] tabLabels = new TextView[4];
-  static final String[] TAB_IDS = {"home", "shelf", "search", "atlas"};
+  private final ImageView[] tabIcons = new ImageView[PaperActivity.TAB_IDS.length];
+  private final TextView[] tabLabels = new TextView[PaperActivity.TAB_IDS.length];
+  static final String[] TAB_IDS = {"role_chat", "home", "shelf", "search", "atlas"};
   static final PathInterpolator SETTLE = new PathInterpolator(.18f, .78f, .22f, 1f);
   static final PathInterpolator RELEASE = new PathInterpolator(.18f, 1.24f, .30f, 1f);
   ScrollView scroll;
@@ -50,7 +50,7 @@ abstract class PaperActivity extends Activity {
   /** Open a second reading column only when both columns remain comfortable to read. */
   LinearLayout secondary() {
     if(getResources().getConfiguration().screenWidthDp<840)return body;
-    workspace.getLayoutParams().width=dp(Math.min(1200,getResources().getConfiguration().screenWidthDp));
+    workspace.getLayoutParams().width=-1;
     workspace.requestLayout();
     sideScroll.setVisibility(View.VISIBLE);
     return sideBody;
@@ -434,7 +434,7 @@ abstract class PaperActivity extends Activity {
     workspace=box(false);
     workspace.setGravity(Gravity.TOP);
     int width=getResources().getConfiguration().screenWidthDp;
-    FrameLayout.LayoutParams columns=new FrameLayout.LayoutParams(tablet()?dp(Math.min(880,width)):-1,-1,Gravity.CENTER_HORIZONTAL);
+    FrameLayout.LayoutParams columns=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER_HORIZONTAL);
     readingArea.addView(workspace,columns);
     workspace.addView(scroll,new LinearLayout.LayoutParams(0,-1,1));
     body = box(true);
@@ -467,7 +467,7 @@ abstract class PaperActivity extends Activity {
 
   private void positionIndicator(boolean animated) {
     if (tabTrack.getWidth() == 0 || activeTab < 0) return;
-    float x = (activeTab + .5f) * tabTrack.getWidth() / 4f - dp(60) / 2f;
+    float x = (activeTab + .5f) * tabTrack.getWidth() / TAB_IDS.length - dp(60) / 2f;
     indicator.animate().cancel();
     if (animated && ValueAnimator.areAnimatorsEnabled())
       indicator.animate().translationX(x).setDuration(280).setInterpolator(SETTLE).start();
@@ -488,8 +488,8 @@ abstract class PaperActivity extends Activity {
       tabTrack.addView(indicator, new FrameLayout.LayoutParams(dp(60), dp(35)));
       nav = box(false);
       tabTrack.addView(nav, new FrameLayout.LayoutParams(-1, -1));
-      String[] titles = {"斩词", "词库", "搜词", "我的"};
-      int[] icons = {R.drawable.s_home, R.drawable.s_shelf, R.drawable.s_search, R.drawable.s_orb};
+      String[] titles = {"对话", "斩词", "词库", "搜词", "我的"};
+      int[] icons = {R.drawable.s_book, R.drawable.s_home, R.drawable.s_shelf, R.drawable.s_search, R.drawable.s_orb};
       for (int i = 0; i < TAB_IDS.length; i++) {
         final int index = i;
         LinearLayout item = box(true);

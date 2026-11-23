@@ -38,8 +38,18 @@ final class LocalLanguageModel {
     return respond(context,turn("system",instruction)+turn("user",text),tokens);
   }
 
+  static final String TRANSLATION="中文译成俄语，俄文译成中文。忠实保留否定、人名、数字、时态和体。只输出译文。 /no_think";
+
+  static String translate(Context context,String text) throws IOException {
+    String travel=TranslationAgreement.travel(text);
+    if(travel!=null)return travel;
+    String result=respond(context,turn("system",TRANSLATION)+turn("user",text),192,true);
+    return TranslationAgreement.correct(result);
+  }
+
   static String chat(Context context,String instruction,List<String> history,String message)
       throws IOException {
+    if(instruction.equals(TRANSLATION))return translate(context,message);
     StringBuilder prompt=new StringBuilder(turn("system",instruction));
     int first=Math.max(0,history.size()-6);
     for(int i=first;i<history.size();i++) {
@@ -62,15 +72,32 @@ final class LocalLanguageModel {
   }
 
   private static String respond(Context context,String prompt,int tokens) throws IOException {
+    return respond(context,prompt,tokens,false);
+  }
+
+  private static synchronized File adapter(Context context) throws IOException {
+    File target=new File(context.getNoBackupFilesDir(),"ru-zh-v2.gguf");
+    if(target.isFile())return target;
+    File tmp=new File(target.getPath()+".part");
+    try(InputStream in=context.getAssets().open("ai/ru-zh-v2.gguf");
+        FileOutputStream out=new FileOutputStream(tmp)) {
+      byte[] buf=new byte[65536];int n;
+      while((n=in.read(buf))!=-1)out.write(buf,0,n);
+    }
+    if(!tmp.renameTo(target))throw new IOException("无法准备翻译模型");
+    return target;
+  }
+
+  private static String respond(Context context,String prompt,int tokens,boolean translate) throws IOException {
     if(!loadLibrary()) throw new IOException("模型不支持此系统架构");
     File model=prepare(context);
     if(Thread.currentThread().isInterrupted()) throw new IOException("已取消");
     prompt += "<|im_start|>assistant\n<think>\n\n</think>\n\n";
     int threads=Math.max(1,Math.min(3,Runtime.getRuntime().availableProcessors()-1));
     byte[] result=infer(model.getPath().getBytes(StandardCharsets.UTF_8),
-        prompt.getBytes(StandardCharsets.UTF_8),threads,tokens);
+        prompt.getBytes(StandardCharsets.UTF_8),threads,tokens,translate?adapter(context).getPath().getBytes(StandardCharsets.UTF_8):null);
     if(result==null) throw new IOException("端侧模型暂未生成文字");
-    return new String(result,StandardCharsets.UTF_8).replaceAll("(?s)<think>.*?</think>", "").trim();
+    return new String(result,StandardCharsets.UTF_8).replaceAll("(?s)<think>.*?</think>", "").replaceAll("(?i)\\s*/(?:no(?:_think)?|think)\\s*$","").trim();
   }
 
   private static synchronized File prepare(Context context) throws IOException {
@@ -109,7 +136,7 @@ final class LocalLanguageModel {
     RELEASE.execute(LocalLanguageModel::release);
   }
 
-  private static native byte[] infer(byte[] filename,byte[] prompt,int threads,int maxTokens);
+  private static native byte[] infer(byte[] filename,byte[] prompt,int threads,int maxTokens,byte[] adapter);
   private static native void interrupt();
   private static native void release();
 }

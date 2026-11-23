@@ -113,6 +113,9 @@ final class ParticlePortrait extends View {
     habits[0] = (float) Math.tanh(seen / 55.0);
     habits[1] = Math.min(1, repeats / (float) Math.max(1, seen * 2));
     habits[2] = (float) Math.tanh(store.practiceDays() / 8.0);
+    int[] chat=store.chatHabits();
+    double[] scales={5,24,8};
+    for(int i=0;i<3;i++) habits[i]+=(1-habits[i])*.5f*(float)Math.tanh(chat[i]/scales[i]);
     for (int k = 0; k < 3; k++) setPreference(k, preferences[k]);
     for (int i = 0; i < particleCount; i++) {
       lat[i] = 1 - 2 * (i + .5f) / particleCount;

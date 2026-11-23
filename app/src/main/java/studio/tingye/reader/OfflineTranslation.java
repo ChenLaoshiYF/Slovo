@@ -90,12 +90,7 @@ final class OfflineTranslation {
 
   String infer(String sentence) throws Exception {
     Map<String,String> words=words(sentence);
-    StringBuilder glossary=new StringBuilder();
-    words.forEach((term,meaning)->glossary.append(term).append("=").append(meaning).append("；"));
-    String translated=LocalLanguageModel.complete(a,
-        "把俄语句子译成自然的简体中文。参考词义，输出完整中文句子，不保留俄文字母。"
-            +"例如：Мы ждём автобуса. → 我们在等公交车。Завтра будет снег. → 明天会下雪。",
-        "词义提示："+glossary+"\n俄语句子："+sentence,96);
+    String translated=LocalLanguageModel.translate(a,sentence);
     if(!translated.codePoints().anyMatch(cp->Character.UnicodeScript.of(cp)==Character.UnicodeScript.HAN))
       throw new java.io.IOException("没有译出中文");
     Matcher leftovers=RUSSIAN.matcher(translated);

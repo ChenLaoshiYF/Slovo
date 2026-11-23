@@ -18,6 +18,10 @@ import java.util.concurrent.Executors;
 /** Short, independent practice conversations powered by the bundled model. */
 final class RoleChat {
   private enum Role {
+    POLISH("俄文润色","", "Пришлите свой текст.","贴一段俄文，我帮你改顺，再解释一处修改。"),
+    EXPAND("俄文扩写","", "О чём вы хотите написать?","给我一句俄文，把它扩成一个短段落。"),
+    COMPOSE("中文题目写俄文","", "Что напишем сегодня?","用中文告诉我主题、写给谁，以及想表达什么。"),
+    TRANSLATE("中俄互译","", "Что перевести?","发中文或俄文都可以。"),
     CAFE("咖啡店店员","a cafe server who takes orders and answers about drinks and prices",
         "Здравствуйте! Что будете заказывать?","您好！想点些什么？"),
     STATION("车站售票员","a railway ticket clerk who asks about destinations and dates",
@@ -36,6 +40,13 @@ final class RoleChat {
     }
 
     String instruction() {
+      switch(this) {
+        case POLISH:return "润色用户的俄文，保留所有事实和语气。先给修改后的俄文，再用一句中文解释格、体或搭配的修改。 /no_think";
+        case EXPAND:return "将用户的俄文自然扩写为三句连贯俄文，保留原文视角和事实。不要翻译题目。 /no_think";
+        case COMPOSE:return "按用户的中文要求写俄文成稿。写邮件时注意收件人、称呼、语气和落款。不要杜撰姓名日期。只在关键信息缺失时询问。 /no_think";
+        case TRANSLATE:return LocalLanguageModel.TRANSLATION;
+        default:break;
+      }
       return "你是耐心的俄语老师，通过角色扮演教中国初学者。当前角色是 "+persona+"。"
           +"始终围绕俄语学习，无论用户用什么语言，都帮他用俄语表达意思。"
           +"使用简单的 A1-A2 俄语，必要时用一句中文解释。纠正明显语法错误。"
@@ -61,7 +72,7 @@ final class RoleChat {
   private final WordActivity a;
   private final ExecutorService engine=Executors.newSingleThreadExecutor();
   private final EnumMap<Role,Room> rooms=new EnumMap<>(Role.class);
-  private Role role=Role.CAFE;
+  private Role role=Role.POLISH;
   private LinearLayout messages;
   private EditText input;
   private View send;
@@ -77,36 +88,30 @@ final class RoleChat {
     Room room=rooms.get(role);
     LinearLayout actions=a.box(false);
     a.wide(actions,a.action(role.title+" ▾",0,false,this::pickRole));
-    a.gap(actions,8);
+    a.gap(actions,6);
+    actions.addView(a.action(cloud()?"我的 API":"手机 AI",0,false,this::pickEngine));
+    a.gap(actions,6);
     actions.addView(a.action("重开",0,false,this::reset));
-    a.gap(a.body,8);
     a.add(a.body,actions,-2);
-    a.gap(a.body,6);
-    a.add(a.body,a.action(cloud()?"使用我的 API ▾":"使用手机 AI ▾",0,false,this::pickEngine),-2);
-    a.gap(a.body,5);
-    a.add(a.body,a.txt(cloud()?"发送时会把当前对话传给你选择的服务。":"常见场景用校订课卡辅助，自由对话由手机模型生成。复杂问题可切换自己的 API。",13,PaperActivity.muted,false),-2);
-    a.gap(a.body,8);
+    if(cloud())a.add(a.body,a.txt("对话会发给你选择的 API 服务。",13,PaperActivity.muted,false),-2);
+    a.gap(a.body,12);
     messages=a.box(true);
     a.add(a.body,messages,-2);
     drawMessages();
 
     input=null;
     send=null;
-    if(!cloud() && !LocalLanguageModel.enabled(a.getPreferences(0))) {
-      a.gap(a.body,9);
-      a.add(a.body,a.action("开启手机 AI",R.drawable.s_gear,true,()->a.openAiSettings("role_chat")),-2);
-      return;
-    }
     LinearLayout dock=a.box(false);
     dock.setGravity(Gravity.CENTER_VERTICAL);
     input=new EditText(a);
-    input.setHint("中文也可以，我会带你用俄语说");
+    input.setHint("写下想说的话…");
+    input.setSingleLine(true);
     input.setContentDescription("对话输入");
     input.setTextSize(16);
     input.setTextColor(PaperActivity.ink);
     input.setHintTextColor(PaperActivity.muted);
     input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-    input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(240)});
+    input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(900)});
     input.setImeOptions(EditorInfo.IME_ACTION_SEND);
     input.setOnEditorActionListener((v,id,event)->{
       if(id!=EditorInfo.IME_ACTION_SEND)return false;
@@ -126,13 +131,19 @@ final class RoleChat {
     a.dock(dock);
     if(a.getResources().getConfiguration().screenWidthDp>=840) {
       LinearLayout side=a.secondary();
-      a.add(side,a.txt("这一轮怎么说",20,PaperActivity.blue,true),-2);
-      a.gap(side,14);
-      a.add(side,a.txt(role.practice(),19,PaperActivity.ink,false),-2);
-      a.gap(side,16);
-      a.add(side,a.action("听示范",R.drawable.s_audio,false,()->a.voice.playExtracted(PhotoText.russianSource(role.practice()))),-2);
-      a.gap(side,16);
-      a.add(side,a.txt("想到什么就说。卡住时可以用中文问“这句怎么说”，或让对方再说慢一点。长按对话中的俄文可以查词。",15,PaperActivity.muted,false),-2);
+      a.add(side,a.txt("试试这句",20,PaperActivity.blue,true),-2);
+      String example;
+      switch(role) {
+        case POLISH: example="Я учиться в университете и изучаю русский язык."; break;
+        case EXPAND: example="Осенью мы поехали на Байкал."; break;
+        case COMPOSE: example="给老师写一封俄文邮件，问他周五下午是否方便见面。"; break;
+        case TRANSLATE: example="我订了两张明天去莫斯科的车票。"; break;
+        default: example=role.practice().split("\n")[0];
+      }
+      a.gap(side,12);
+      a.add(side,a.txt(example,19,PaperActivity.ink,false),-2);
+      a.add(side,a.action("放入输入框",0,false,()->{input.setText(example);input.setSelection(input.length());input.requestFocus();}),-2);
+      if(!PhotoText.russianSource(example).isEmpty())a.add(side,a.action("听示范",R.drawable.s_audio,false,()->a.voice.playExtracted(example)),-2);
     }
     if(!room.turns.isEmpty() || !room.pending.isEmpty())scrollDown();
   }
@@ -161,7 +172,7 @@ final class RoleChat {
   private void pickRole() {
     String[] labels=new String[Role.values().length];
     for(Role option:Role.values())labels[option.ordinal()]=option.title;
-    new FeedbackDialog(a).setTitle("选一个角色")
+    new FeedbackDialog(a).setTitle("想练什么？")
         .setSingleChoiceItems(labels,role.ordinal(),(dialog,index)->{
           dialog.dismiss();
           if(role.ordinal()==index)return;
@@ -227,9 +238,17 @@ final class RoleChat {
   }
 
   private void send() {
-    if(generating || input==null || (!cloud() && !LocalLanguageModel.enabled(a.getPreferences(0))))return;
+    if(generating || input==null)return;
     String message=input.getText().toString().trim();
     if(message.isEmpty())return;
+    if(!cloud() && !LocalLanguageModel.enabled(a.getPreferences(0))) {
+      rooms.get(role).draft=message;
+      new FeedbackDialog(a).setTitle("开启手机 AI？").setMessage("模型会在手机上运行，断网也能用。")
+          .setNegativeButton("取消",null).setPositiveButton("开启并发送",(d,i)->{
+            a.getPreferences(0).edit().putBoolean(LocalLanguageModel.ENABLED,true).apply();send();
+          }).show();
+      return;
+    }
     Role chosen=role;
     boolean useCloud=cloud();
     CloudAi.Provider provider=CloudAi.selected(a.getPreferences(0));
@@ -248,17 +267,18 @@ final class RoleChat {
       String result="";
       String failure="";
       try {
-        String reviewed=TutorGuide.answer(chosen.name(),message);
+        boolean writing=chosen.persona.isEmpty();
+        String reviewed=writing?"":TutorGuide.answer(chosen.name(),message);
         String grounded=chosen.instruction();
-        if(!useCloud && reviewed.isEmpty())grounded+=a.dictionaryContext(message);
+        if(!writing && !useCloud && reviewed.isEmpty())grounded+=a.dictionaryContext(message);
         result=(!useCloud && !reviewed.isEmpty())?reviewed:(useCloud?CloudAi.chat(a.getPreferences(0),provider,chosen.instruction(),history,message).text
-            :LocalLanguageModel.chat(a.getApplicationContext(),grounded,history,message)).trim();
-        if(result.isEmpty() || result.equalsIgnoreCase(message))throw new IOException("没有可用回复");
-        if(!useCloud && result.matches("(?s).*[А-Яа-яЁё][\\u4e00-\\u9fff].*"))
+            :writing?WritingPractice.answer(a.getApplicationContext(),chosen.name(),grounded,history,message):LocalLanguageModel.chat(a.getApplicationContext(),grounded,history,message)).trim();
+        if(result.isEmpty() || (!writing && result.equalsIgnoreCase(message)))throw new IOException("没有可用回复");
+        if(!writing && !useCloud && result.matches("(?s).*[А-Яа-яЁё][\\u4e00-\\u9fff].*"))
           result="这句先从常用表达练起。\n"+chosen.practice();
-        if(!result.contains("?") && !result.contains("？"))
+        if(!writing && !result.contains("?") && !result.contains("？"))
           result+="\n"+chosen.practice().substring(chosen.practice().lastIndexOf('\n')+1);
-        if(!result.matches("(?s).*[А-Яа-яЁё]{2,}.*"))
+        if(!writing && !result.matches("(?s).*[А-Яа-яЁё]{2,}.*"))
           result+="\n\n练一句\n"+chosen.practice();
       } catch(Exception error) {
         android.util.Log.w("Slovo","Role chat failed",error);
@@ -277,6 +297,7 @@ final class RoleChat {
     room.pending="";
     room.failure=problem;
     if(problem.isEmpty()) {
+      a.learnFromChat(chosen.name(),message,reply);
       room.turns.add(message);
       room.turns.add(reply);
       if(room.turns.size()>48)room.turns.subList(0,2).clear();

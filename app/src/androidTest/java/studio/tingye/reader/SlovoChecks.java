@@ -22,6 +22,7 @@ public final class SlovoChecks extends Instrumentation {
       String suite=arguments.getString("suite","data");
       if(suite.equals("speech"))speech();
       else if(suite.equals("installer"))installer();
+      else if(suite.equals("adapt"))adapt();
       else if(suite.equals("chat"))chat();
       else data();
       output.putString("stream","PASS "+suite+" · "+checks+" checks\n");finish(-1,output);
@@ -30,6 +31,33 @@ public final class SlovoChecks extends Instrumentation {
       output.putString("stream","FAIL "+error+"\n");finish(0,output);
     }
   }
+  private void adapt() throws Exception {
+    for(String input:new String[]{"Я не работаю в пятницу.","我需要两张票。","Мы купили три книги."}) {
+      String reply=LocalLanguageModel.translate(getTargetContext(),input);
+      android.util.Log.i("SlovoChecks","TRANSLATION "+input+" => "+reply);
+      if(input.contains("пятницу"))require((reply.contains("五") && (reply.contains("不") || reply.contains("没"))),"weekday and negation preserved");
+      else if(input.contains("票"))require(reply.contains("два билета"),"number and gender agreement");
+      else require(reply.contains("三") && (reply.contains("书") || reply.contains("書")),"book count preserved");
+    }
+    Lexicon lex=new Lexicon(getTargetContext());
+    StudyStore store=new StudyStore(getTargetContext(),lex);
+    android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();
+    db.beginTransaction();
+    try {
+      store.clearChat();
+      Lexicon.Book book=lex.books.get(0);
+      String word=book.words.get(book.words.size()-1);
+      store.recordChat("POLISH",Collections.singleton(word));
+      store.recordChat("TRANSLATE",Collections.singleton(word));
+      require(Arrays.equals(store.chatHabits(),new int[]{2,2,1}),"portrait reflects multi-turn practice");
+      require(store.interests().get(word)>1.9,"repeat exposure increases recommendation weight");
+      store.plan=book.k;store.goal=100;store.session=new StudyStore.Session();store.start();
+      require(store.session.queue.contains(word),"conversation vocabulary enters new-word queue");
+      require(Collections.frequency(store.session.queue,word)==1,"no duplicated recommendation");
+      store.clearChat();require(store.interests().isEmpty(),"forget conversation dataset");
+    } finally { db.endTransaction();store.close();lex.close(); }
+  }
+
   private void speech() throws Exception {
     OfflineSpeech wrapper=new OfflineSpeech(getTargetContext());
     Method prepare=OfflineSpeech.class.getDeclaredMethod("prepare");prepare.setAccessible(true);
@@ -105,12 +133,20 @@ public final class SlovoChecks extends Instrumentation {
       String prompt=(String)instruction.invoke(role);
       String user=role.toString().equals("CAFE")?"我想要一杯不加糖的咖啡":
           role.toString().equals("STATION")?"我想明天去莫斯科":role.toString().equals("STUDENT")?"我学电子科学，我不太会俄语":"我不知道怎么用俄语介绍自己";
-      String reply=LocalLanguageModel.chat(getTargetContext(),prompt,Collections.emptyList(),user);
+      switch(role.toString()){
+        case "POLISH":user="Я учиться в университете.";break;
+        case "COMPOSE":user="给老师写一封俄文邮件，请问周五能否见面。";break;
+        case "EXPAND":user="Осенью мы поехали на Байкал.";break;
+        case "TRANSLATE":user="我想去莫斯科。";break;
+      }
+      String reply=WritingPractice.answer(getTargetContext(),role.toString(),prompt,Collections.emptyList(),user);
       android.util.Log.i("SlovoChecks","CHAT "+role+" USER "+user+" REPLY "+reply);
+      if(role.toString().equals("COMPOSE"))require(reply.contains("пятницу") && reply.contains("уважением"),"email addresses the requested day and register");
+      if(role.toString().equals("EXPAND"))require(reply.length()>user.length()+12,"expansion adds material");
       require(!reply.isEmpty(),"reply "+role);
       require(reply.matches("(?s).*[А-Яа-яЁё]{2,}.*"),"Russian teaching response "+role);
     }
-    Object tutor=roleClass.getEnumConstants()[3];String prompt=(String)instruction.invoke(tutor);
+    Object tutor=Enum.valueOf((Class)roleClass,"TUTOR");String prompt=(String)instruction.invoke(tutor);
     List<String> history=new ArrayList<>();
     for(String user:new String[]{"我不会俄语","Я студент и я учиться русский язык.","先别教俄语了，陪我聊聊天气", "那明天呢？"}) {
       String reply=LocalLanguageModel.chat(getTargetContext(),prompt,history,user);
