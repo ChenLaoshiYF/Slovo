@@ -195,7 +195,6 @@ public final class WordActivity extends PaperActivity {
         1800);
   }
 
-  private boolean backNavigation;
   private View riverPhoto;
   private PhotoTransition riverMotion;
   private boolean switchingTab;
@@ -211,8 +210,7 @@ public final class WordActivity extends PaperActivity {
       backToCurrent();
       return;
     }
-    backNavigation = true;
-    try { returnToParent(); } finally { backNavigation = false; }
+    returnToParent();
   }
 
   private void returnToParent() {
@@ -375,13 +373,7 @@ public final class WordActivity extends PaperActivity {
     if (!sub) tabs(next, this::navigateTab);
     finishTheme(next);
     if (oldRiver != null) riverMotion.move(oldRiver, riverPhoto);
-    else if (hadPage && !from.equals(next)) {
-      int fromTab = tabIndex(from), toTab = tabIndex(next);
-      if (fromTab >= 0 && toTab >= 0)
-        arrive(scroll, Integer.signum(toTab - fromTab) * 7, 0, 240);
-      else
-        arrive(scroll, sub && !backNavigation ? 9 : -7, 0, 240);
-    }
+    else if (hadPage && !from.equals(next)) arrive(scroll,160);
 
   }
 
@@ -466,6 +458,7 @@ public final class WordActivity extends PaperActivity {
     gap(body,13);
     JSONObject hint=lex.usage.optJSONObject(review.word.k);
     add(body,serif(hint==null?review.word.ru:hint.optString("stress",review.word.ru),34,ink),-2);
+    phonetics(body,review.word.k,muted);
     gap(body,10);
     add(body,txt(review.word.zh,22,ink,true),-2);
     gap(body,10);
@@ -474,7 +467,7 @@ public final class WordActivity extends PaperActivity {
       add(body,txt("这次作答 · "+grades[review.grade],15,muted,false),-2);
     gap(body,14);
     add(body,action("听发音",R.drawable.s_audio,false,()->voice.play(review.word.ru)),-2);
-    usage(body,hint);
+    usage(body,review.word,hint);
     gap(body,14);
     add(body,action("返回当前词",R.drawable.s_arrow,true,this::backToCurrent),-2);
   }
@@ -960,6 +953,7 @@ public final class WordActivity extends PaperActivity {
     word.setShadowLayer(dp(3), 0, 1, 0xaa102720);
     word.setContentDescription(w.ru);
     add(card,word,-2);
+    phonetics(card,w.k,white);
     if (!w.pos.isEmpty()) {
       gap(card, 10);
       add(
@@ -973,7 +967,7 @@ public final class WordActivity extends PaperActivity {
     }
     if(tablet())card.setMinimumHeight(dp(getResources().getConfiguration().screenWidthDp>=840?310:340));
     add(body, card, -2);
-    if (advance) arrive(card, 16, 0, 190);
+    if (advance) arrive(card, 160);
     answerPanel = box(true);
     add(secondary(), answerPanel, -2);
     answerDock = box(false);
@@ -1017,7 +1011,7 @@ public final class WordActivity extends PaperActivity {
         gap(answerPanel, 4);
         add(answerPanel, txt("刚才选了「" + choices.get(answer) + "」", 14, muted, false), -2);
       }
-      usage(answerPanel, hint);
+      usage(answerPanel, w, hint);
       if (rec != null && !rec.note.isEmpty()) {
         section(answerPanel, "我的联想", "");
         add(answerPanel, txt(rec.note, 15, ink, false), -2);
@@ -1061,16 +1055,104 @@ public final class WordActivity extends PaperActivity {
     shell.addView(controls, new LinearLayout.LayoutParams(-1, -2));
   }
 
-  void usage(LinearLayout host, JSONObject hint) {
-    if (hint == null) return;
-    if (hint.has("example")) {
-      section(host, "例句", "");
-      TextView sentence=serif(hint.optString("example"),19,ink);
-      sentence.setTextIsSelectable(true); add(host,sentence,-2);
-      gap(host, 5);
-      add(host, txt(hint.optString("translation"), 15, muted, false), -2);
+  private void phonetics(LinearLayout host,String key,int color) {
+    JSONObject entry=lex.reviewEvidence.optJSONObject(key);
+    String reading=entry==null?"":entry.optString("ipa");
+    boolean derived=entry!=null && entry.optBoolean("derived");
+    if(reading.isEmpty() && "detail".equals(screen))return; // Full dictionary draws its own IPA.
+    TextView ipa=txt(reading.isEmpty()?"":"IPA  "+reading+(derived?"  ·  按重音推导":""),16,color,false);
+    if(color==white)ipa.setShadowLayer(dp(3),0,1,0xcc102720);
+    pad(ipa,0,4,0,0);add(host,ipa,-2);
+    if(!reading.isEmpty())return;
+    ipa.setVisibility(View.GONE);
+    io.execute(()->{
+      try{
+        JSONObject value=details.resolve(key);
+        if(value==null)return;
+        // A lemma's transcription cannot be used for the inflected word on the card.
+        JSONObject exact=value.has("form")?value:value.optJSONObject("entry");
+        String transcription=exact==null?"":exact.optString("ipa");
+        if(!transcription.isEmpty())ui.post(()->{
+          if(!ipa.isAttachedToWindow())return;
+          ipa.setText("IPA  "+transcription);ipa.setVisibility(View.VISIBLE);
+        });
+      }catch(Exception error){android.util.Log.w("Slovo","Personal word pronunciation",error);}
+    });
+  }
+
+  private void reviewSentence(LinearLayout host,String ru,String zh,boolean machine) {
+    section(host,"例句","");
+    LinearLayout row=box(false);
+    TextView words=serif(ru,19,ink);
+    selectableWords(words,screen);
+    wide(row,words);
+    row.addView(iconButton(R.drawable.s_audio,"朗读例句",()->voice.playExtracted(ru)),dp(48),dp(48));
+    add(host,row,-2);
+    if(!zh.isEmpty()){
+      TextView translation=txt((machine?"参考机译 · ":"")+zh,15,muted,false);
+      translation.setTag("review.translation");
+      add(host,translation,-2);
+    }else {
+      TextView translation=txt("翻译例句",15,blue,true);
+      translation.setTag("review.translation");
+      translation.setMinimumHeight(dp(48));translation.setGravity(Gravity.CENTER_VERTICAL);
+      touchAction(translation,()->{
+        if(!getPreferences(0).getBoolean(LocalLanguageModel.ENABLED,false)){
+          new AlertDialog.Builder(this).setMessage("开启手机 AI 后，可以离线翻译这条例句。")
+              .setNegativeButton("取消",null).setPositiveButton("开启并翻译",(dialog,id)->{
+                getPreferences(0).edit().putBoolean(LocalLanguageModel.ENABLED,true).apply();
+                translateExample(ru,translation);
+              }).show();
+        }else translateExample(ru,translation);
+      });
+      add(host,translation,-2);
     }
-    String forms = hint.optString("forms");
+  }
+
+  private void translateExample(String ru,TextView target) {
+    target.setEnabled(false);target.setText("正在翻译…");
+    io.execute(()->{
+      String result;
+      try{
+        String cached=translations.find(ru);
+        result=cached.isEmpty()?"参考机译 · "+translations.infer(ru):cached;
+      }catch(Exception exception){result="重试翻译";}
+      String text=result;
+      ui.post(()->{
+        if(!target.isAttachedToWindow())return;
+        target.setText(text);target.setEnabled(text.equals("重试翻译"));
+      });
+    });
+  }
+
+  void usage(LinearLayout host,Lexicon.Word word,JSONObject hint) {
+    String ru=hint==null?"":hint.optString("example");
+    String zh=hint==null?"":hint.optString("translation");
+    JSONObject evidence=lex.reviewEvidence.optJSONObject(word.k);
+    JSONArray pair=evidence==null?null:evidence.optJSONArray("line");
+    if(pair!=null && (ru.isEmpty() || evidence.has("meaning") || "词汐".equals(pair.optString(4))))
+      reviewSentence(host,pair.optString(0),pair.optString(1),evidence.optBoolean("machine"));
+    else if(!ru.isEmpty())reviewSentence(host,ru,zh,false);
+    else {
+      LinearLayout example=box(true);add(host,example,-2);
+      io.execute(()->{
+        JSONArray line=null;
+        try {
+          JSONObject result=details.resolve(word.k);
+          JSONObject entry=result==null?null:result.optJSONObject("entry");
+          JSONArray examples=entry==null?null:entry.optJSONArray("examples");
+          if(examples!=null)line=examples.optJSONArray(0);
+        } catch(Exception error){android.util.Log.w("Slovo","Review sentence lookup",error);}
+        JSONArray found=line;
+        ui.post(()->{
+          if(!example.isAttachedToWindow())return;
+          if(found!=null && !found.optString(0).isEmpty())
+            reviewSentence(example,found.optString(0),found.optString(1),false);
+          else add(example,action("请俄语老师举例",R.drawable.s_orb,false,()->roleChat.fromWord(word.ru)),-2);
+        });
+      });
+    }
+    String forms = hint==null?"":hint.optString("forms");
     if (!forms.isEmpty()) {
       section(host, "常见词形", "");
       add(host, txt(forms, 15, ink, false), -2);
@@ -1085,8 +1167,15 @@ public final class WordActivity extends PaperActivity {
     Lexicon.Word w = data.word(quizKey);
     renderAnswer(w, data.cards.get(w.k), lex.usage.optJSONObject(w.k));
     finishTheme(screen);
-    arrive(answerPanel, 0, 9, 180);
-    arrive(answerDock, 0, 4, 155);
+    arrive(answerPanel,150);
+    if(n>=0){
+      TextView translation=answerPanel.findViewWithTag("review.translation");
+      if(translation!=null)translation.post(()->{
+        if(!translation.isAttachedToWindow())return;
+        Rect bounds=new Rect(0,0,translation.getWidth(),translation.getHeight()+dp(8));
+        translation.requestRectangleOnScreen(bounds,!android.animation.ValueAnimator.areAnimatorsEnabled());
+      });
+    }
   }
 
   void grade(String key, int grade) {
@@ -1100,6 +1189,7 @@ public final class WordActivity extends PaperActivity {
       voice.stop();
       scroll.scrollTo(0, 0);
       body.removeAllViews();
+      if(sideBody!=null){sideScroll.scrollTo(0,0);sideBody.removeAllViews();}
       shell.removeView(answerDock);
       if (data.session.active()) {
         nextStudyScenery();
@@ -1830,7 +1920,7 @@ public final class WordActivity extends PaperActivity {
               int land = personal ? Math.floorMod(next, FieldArt.LAND.length)
                   : Postcards.VERSE_PLACE[Math.floorMod(next, Postcards.VERSE.length)];
               fillPostcard(panel, personal, next, land);
-              arrive(panel, 0, 8, 190);
+              arrive(panel, 160);
             }));
     add(body,action("编辑文字",0,false,()->{
       EditText field=new EditText(this);
@@ -2072,6 +2162,7 @@ public final class WordActivity extends PaperActivity {
             w.ru.length() > 14 ? 30 : 37,
             ink),
         -2);
+    phonetics(body,w.k,muted);
     gap(body, 14);
     TextView definition = txt(w.zh, 19, ink, false);
     definition.setTextIsSelectable(true);

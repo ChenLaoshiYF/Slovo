@@ -72,7 +72,7 @@ final class RoleChat {
   private final WordActivity a;
   private final ExecutorService engine=Executors.newSingleThreadExecutor();
   private final EnumMap<Role,Room> rooms=new EnumMap<>(Role.class);
-  private Role role=Role.POLISH;
+  private Role role=Role.TUTOR;
   private LinearLayout messages;
   private EditText input;
   private View send;
@@ -175,11 +175,15 @@ final class RoleChat {
     new FeedbackDialog(a).setTitle("想练什么？")
         .setSingleChoiceItems(labels,role.ordinal(),(dialog,index)->{
           dialog.dismiss();
-          if(role.ordinal()==index)return;
-          leave();
-          role=Role.values()[index];
-          a.show("role_chat");
+          selectRole(Role.values()[index]);
         }).setNegativeButton("取消",null).show();
+  }
+
+  private void selectRole(Role next) {
+    if(role==next)return;
+    leave();
+    role=next;
+    a.show("role_chat");
   }
 
   private void reset() {
@@ -258,7 +262,6 @@ final class RoleChat {
     room.failure="";
     room.draft="";
     input.setText("");
-    a.hideKeys();
     generating=true;
     updateSend();
     drawMessages();
@@ -267,19 +270,7 @@ final class RoleChat {
       String result="";
       String failure="";
       try {
-        boolean writing=chosen.persona.isEmpty();
-        String reviewed=writing?"":TutorGuide.answer(chosen.name(),message);
-        String grounded=chosen.instruction();
-        if(!writing && !useCloud && reviewed.isEmpty())grounded+=a.dictionaryContext(message);
-        result=(!useCloud && !reviewed.isEmpty())?reviewed:(useCloud?CloudAi.chat(a.getPreferences(0),provider,chosen.instruction(),history,message).text
-            :writing?WritingPractice.answer(a.getApplicationContext(),chosen.name(),grounded,history,message):LocalLanguageModel.chat(a.getApplicationContext(),grounded,history,message)).trim();
-        if(result.isEmpty() || (!writing && result.equalsIgnoreCase(message)))throw new IOException("没有可用回复");
-        if(!writing && !useCloud && result.matches("(?s).*[А-Яа-яЁё][\\u4e00-\\u9fff].*"))
-          result="这句先从常用表达练起。\n"+chosen.practice();
-        if(!writing && !result.contains("?") && !result.contains("？"))
-          result+="\n"+chosen.practice().substring(chosen.practice().lastIndexOf('\n')+1);
-        if(!writing && !result.matches("(?s).*[А-Яа-яЁё]{2,}.*"))
-          result+="\n\n练一句\n"+chosen.practice();
+        result=reply(chosen,useCloud,provider,history,message);
       } catch(Exception error) {
         android.util.Log.w("Slovo","Role chat failed",error);
         failure="这句没有生成，输入已保留。可以重试或切换模型。";
@@ -290,6 +281,43 @@ final class RoleChat {
         finish(chosen,message,reply,problem);
       });
     });
+  }
+
+  private String reply(Role chosen,boolean useCloud,CloudAi.Provider provider,List<String> history,String message) throws Exception {
+    String prompt=chosen.instruction();
+    if(chosen.persona.isEmpty()){
+      String text=useCloud?CloudAi.chat(a.getPreferences(0),provider,prompt,history,message).text
+          :WritingPractice.answer(a.getApplicationContext(),chosen.name(),prompt,history,message);
+      if(text.trim().isEmpty())throw new IOException("没有可用回复");
+      return text.trim();
+    }
+    String context=RoleContext.instruction(chosen.name(),history);
+    String reviewed=useCloud?"":RoleContext.lesson(chosen.name(),history,message);
+    if(!reviewed.isEmpty())return RoleContext.russianFirst(reviewed);
+    if(!useCloud){
+      context+=a.dictionaryContext(message);
+      if(message.matches("(?s).*\\p{IsHan}.*") && !message.matches("(?s).*[А-Яа-яЁё].*")){
+        try {
+          String translation=LocalLanguageModel.translate(a.getApplicationContext(),message);
+          if(translation.matches("(?s).*[А-Яа-яЁё]{2,}.*"))
+            message+="\nВозможный перевод реплики ученика: "+translation;
+        } catch(IOException error) {
+          android.util.Log.w("Slovo","Using original learner input",error);
+        }
+      }
+    }
+    List<String> recent=history.subList(Math.max(0,history.size()-6),history.size());
+    String text=generate(useCloud,provider,context,recent,message);
+    String reply=RoleContext.russianFirst(text);
+    if(!reply.isEmpty() && !reply.contains(chosen.opening))return reply;
+    text=generate(useCloud,provider,context+" Ответь собеседнику только по-русски.",recent,message);
+    reply=RoleContext.russianFirst(text);
+    return reply.isEmpty()?"Я не совсем понимаю. Можете сказать это иначе?":reply;
+  }
+
+  private String generate(boolean cloud,CloudAi.Provider provider,String prompt,List<String> history,String message) throws Exception {
+    return cloud?CloudAi.chat(a.getPreferences(0),provider,prompt,history,message).text
+        :LocalLanguageModel.chat(a.getApplicationContext(),prompt,history,message);
   }
 
   private void finish(Role chosen,String message,String reply,String problem) {
@@ -322,7 +350,7 @@ final class RoleChat {
   private void scrollDown() {
     if(messages==null)return;
     android.widget.ScrollView scroll=a.scroll;
-    scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN));
+    scroll.post(()->{ if(scroll==a.scroll && messages!=null)scroll.scrollTo(0,scroll.getChildAt(0).getHeight()); });
   }
 
   void fromWord(String word) {
@@ -342,8 +370,8 @@ final class RoleChat {
   }
 
   void restore(android.os.Bundle state) {
-    try { role=Role.valueOf(state.getString("chatRole",Role.CAFE.name())); }
-    catch(IllegalArgumentException ignored) { role=Role.CAFE; }
+    try { role=Role.valueOf(state.getString("chatRole",Role.TUTOR.name())); }
+    catch(IllegalArgumentException ignored) { role=Role.TUTOR; }
     for(Role option:Role.values()) {
       Room room=rooms.get(option);
       ArrayList<String> history=state.getStringArrayList("chat_"+option.name());

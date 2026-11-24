@@ -22,6 +22,8 @@ public final class SlovoChecks extends Instrumentation {
       String suite=arguments.getString("suite","data");
       if(suite.equals("speech"))speech();
       else if(suite.equals("installer"))installer();
+      else if(suite.equals("interface")){new InterfaceAudit(this).run();require(true,"layout and role conversations");}
+      else if(suite.equals("evidence"))evidence();
       else if(suite.equals("adapt"))adapt();
       else if(suite.equals("chat"))chat();
       else data();
@@ -31,6 +33,25 @@ public final class SlovoChecks extends Instrumentation {
       output.putString("stream","FAIL "+error+"\n");finish(0,output);
     }
   }
+  private void evidence() throws Exception {
+    Lexicon lex=new Lexicon(getTargetContext());
+    try {
+      Set<String> keys=new HashSet<>();
+      for(Lexicon.Book book:lex.books)keys.addAll(book.words);
+      for(String key:keys){
+        JSONObject row=lex.reviewEvidence.getJSONObject(key);
+        String ipa=row.getString("ipa");JSONArray pair=row.getJSONArray("line");
+        if(!(ipa.startsWith("[") && ipa.endsWith("]") || ipa.startsWith("/") && ipa.endsWith("/"))
+            || ipa.matches("(?s).*[А-Яа-яЁё].*") || !pair.getString(0).matches("(?s).*[А-Яа-яЁё].*")
+            || !pair.getString(1).matches("(?s).*\\p{IsHan}.*"))
+          throw new AssertionError("Incomplete card "+key);
+      }
+      require(keys.size()==7219,"all 7219 distinct study words include IPA and bilingual sentences");
+      require(lex.publishedWord("вс").ru.equals("всё"),"legacy key displays corrected headword");
+      require(lex.reviewEvidence.getJSONObject("город").getString("ipa").contains("ˈ"),"stress in city IPA");
+    }finally{lex.close();}
+  }
+
   private void adapt() throws Exception {
     for(String input:new String[]{"Я не работаю в пятницу.","我需要两张票。","Мы купили три книги."}) {
       String reply=LocalLanguageModel.translate(getTargetContext(),input);

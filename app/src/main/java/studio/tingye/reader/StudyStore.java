@@ -299,7 +299,10 @@ final class StudyStore extends SQLiteOpenHelper {
 
   Lexicon.Word word(String k) {
     Card c = cards.get(k);
-    return c != null ? c.word() : lex.publishedWord(k);
+    if(c==null)return lex.publishedWord(k);
+    org.json.JSONObject evidence=lex.reviewEvidence.optJSONObject(k);
+    if(evidence!=null && evidence.has("meaning"))return lex.publishedWord(k);
+    return c.word();
   }
 
   void save(Card c) {

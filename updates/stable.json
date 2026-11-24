@@ -1,24 +1,24 @@
 {
   "package": "studio.tingye.reader",
-  "versionCode": 12,
-  "versionName": "0.10.0",
+  "versionCode": 13,
+  "versionName": "0.10.1",
   "minSdk": 26,
-  "notes": "首页新增俄语对话、润色、扩写和中俄互译。内置翻译适配器。对话词汇参与新词推荐与粒子像。平板支持分栏，词形可跳原形，个人明信片可编辑。",
+  "notes": "斩词查看释义即可阅读、朗读双语例句。7,219 个内置学习词配有国际音标。书架恢复原书封面，优化按钮对齐、键盘和俄语角色对话。",
   "assets": {
     "arm64-v8a": {
-      "url": "https://github.com/ChenLaoshiYF/Slovo/releases/download/v0.10.0/Slovo-ARM64.apk",
-      "sha256": "4dd9aee27e10988dcd17ee6afb80550d8036750c6071c2565ff846ff44fc83e0",
-      "size": 537563288
+      "url": "https://github.com/ChenLaoshiYF/Slovo/releases/download/v0.10.1/Slovo-ARM64.apk",
+      "sha256": "6bd54fa54e8adc51d50ae1a4fda4f040c002ed0aad37abdc3628d088de21ced6",
+      "size": 538798145
     },
     "armeabi-v7a": {
-      "url": "https://github.com/ChenLaoshiYF/Slovo/releases/download/v0.10.0/Slovo-ARM32.apk",
-      "sha256": "7a2d5e692370715feb1e94809bd3856060b5254ad87c72ff517cdf6f09dff9e6",
-      "size": 526229432
+      "url": "https://github.com/ChenLaoshiYF/Slovo/releases/download/v0.10.1/Slovo-ARM32.apk",
+      "sha256": "a68ba36b694a317453634cb015995374d7d6aa9c2998c8ca9c8af1fe865cb437",
+      "size": 527464289
     },
     "x86_64": {
-      "url": "https://github.com/ChenLaoshiYF/Slovo/releases/download/v0.10.0/Slovo-x86_64.apk",
-      "sha256": "d6197d2e0efcc8c4b9e12aee4119af32587a58eafcbdda3b2abddea52a2add6b",
-      "size": 541204442
+      "url": "https://github.com/ChenLaoshiYF/Slovo/releases/download/v0.10.1/Slovo-x86_64.apk",
+      "sha256": "174d55c49431e266dbb51611c82c8bb9b1c9f9a9706f05b464e4637922c55972",
+      "size": 542439299
     }
   }
 }

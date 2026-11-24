@@ -51,3 +51,17 @@ https://mymemory.translated.net/doc/spec.php
 
 公开版俄语读音由 Piper 的 ru_RU-denis-medium 离线生成。模型仓库标为 MIT，Denis 数据集在模型卡标为 CC0。发行包包含生成的 MP3。
 https://huggingface.co/rhasspy/piper-voices/blob/v1.0.0/ru/ru_RU/denis/medium/MODEL_CARD
+
+斩词卡附有俄语音标和双语例句。review-evidence.json 的 ipa 使用国际音标；derived 为 true 表示依据标重音的俄文和俄语音系规则转写。词典 IPA 与部分例句出自英语、中文与俄语 Wiktionary 及其贡献者。英语维基词典经 Kaikki 抽取。释义、词形、重音及音标数据按 CC BY-SA 4.0 分享。词条按原词可访问对应语言站点并查看修订历史。
+https://kaikki.org/dictionary/Russian/
+https://en.wiktionary.org/wiki/Appendix:Russian_pronunciation
+https://ru.wiktionary.org/
+https://github.com/abuccts/wikt2pron
+https://creativecommons.org/licenses/by-sa/4.0/
+
+line 的前两项为俄文与中文。Tatoeba 例句后续数字分别为俄文、中文及中介英语句号 ID；非零号可在 https://tatoeba.org/en/sentences/show/ID 查阅原作者和译者。中介英语编号表示两句在 Tatoeba 经同一英语译句链接。许可 CC BY 2.0 FR。“Wiktionary”和“ru.wiktionary”表示该词条的例句，“词汐”表示本项目编写。rus_wikipedia_2021_1M 表示莱比锡大学 Leipzig Corpora Collection 的俄语维基百科 2021 一百万句语料，第三项为该语料的句子编号。来源与使用条款见下方。
+https://wortschatz.uni-leipzig.de/en/download/Russian
+https://wortschatz.uni-leipzig.de/en/usage
+
+machine 为 true 的中文是使用 NLLB-200-distilled-600M 离线生成的参考机译。例句及译文随包提供。学习卡界面标注机译，单词朗读、查看例句与已有中文均可离线使用。
+https://huggingface.co/facebook/nllb-200-distilled-600M

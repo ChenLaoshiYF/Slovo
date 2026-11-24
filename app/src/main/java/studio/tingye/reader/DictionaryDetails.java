@@ -18,7 +18,7 @@ final class DictionaryDetails {
 
   private void prepare() throws IOException {
     if(db!=null)return;
-    File file=new File(a.getFilesDir(),"dictionary-details-v2.sqlite");
+    File file=new File(a.getFilesDir(),"dictionary-details-v3.sqlite");
     if(!file.isFile()) {
       File part=new File(file.getPath()+".part");
       try(InputStream input=new GZIPInputStream(a.getAssets().open("dictionary-details.bin"));
@@ -27,6 +27,9 @@ final class DictionaryDetails {
         for(int n;(n=input.read(buffer))!=-1;)output.write(buffer,0,n);
       }
       if(!part.renameTo(file))throw new IOException("无法准备详细词典");
+      // The previous file was also an unpacked, read-only asset. Learner data lives in StudyStore.
+      File previous=new File(a.getFilesDir(),"dictionary-details-v2.sqlite");
+      if(previous.isFile() && !previous.delete())android.util.Log.i("Slovo","Older dictionary cache retained");
     }
     db=SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY);
   }
@@ -68,7 +71,7 @@ final class DictionaryDetails {
     if(extra!=main)a.add(side,extra,-2);
     a.io.execute(()->{
       JSONObject value=null; String failure="";
-      try { value=resolve(word.k); }
+      try { value=resolve(word.ru); }
       catch(Exception error) { failure="详细词条没有打开，点此重试"; android.util.Log.w("Slovo","Dictionary details",error); }
       JSONObject result=value; String problem=failure;
       a.ui.post(()->{
@@ -98,15 +101,17 @@ final class DictionaryDetails {
   private void draw(LinearLayout main,LinearLayout extra,JSONObject result,Lexicon.Word original) {
     JSONObject e=result.optJSONObject("entry");
     String lemma=e.optString("word",original.ru), stress=e.optString("stress",lemma);
+    JSONObject card=a.lex.reviewEvidence.optJSONObject(original.k);
+    boolean needsIpa=card==null || card.optString("ipa").isEmpty();
     if(result.has("form")) {
       title(main,"词形来源");
       text(main,result.optString("form")+" ← "+stress,21);
       text(main,result.optString("formLabel"),15);
-      if(!result.optString("ipa").isEmpty())text(main,result.optString("ipa"),16);
+      if(needsIpa && !result.optString("ipa").isEmpty())text(main,result.optString("ipa"),16);
       a.gap(main,8);
       if(!Lexicon.key(lemma).equals(original.k)) a.add(main,a.action("查看原形 · "+stress,R.drawable.s_arrow,true,()->lookup(lemma)),-2);
       a.add(main,a.action("听原形 · "+stress,R.drawable.s_audio,false,()->a.voice.play(lemma)),-2);
-    } else if(!e.optString("ipa").isEmpty())text(main,e.optString("ipa"),16);
+    } else if(needsIpa && !e.optString("ipa").isEmpty())text(main,e.optString("ipa"),16);
     String grammar=String.join("  ·  ",new String[]{e.optString("pos"),e.optString("aspect"),e.optString("gender"),e.optString("animate")})
         .replaceAll("^(  ·  )+|(  ·  )+$","").replaceAll("(  ·  ){2,}","  ·  ");
     text(main,grammar,15);

@@ -63,6 +63,7 @@ final class Lexicon {
   final LinkedHashMap<String, Word> supplements = new LinkedHashMap<>();
   final HashMap<String, AudioRange> supplementalAudio = new HashMap<>();
   final JSONObject usage;
+  final JSONObject reviewEvidence;
   int size;
   private SQLiteDatabase db;
 
@@ -107,7 +108,32 @@ final class Lexicon {
         JSONArray values = words.getJSONArray(key);
         supplements.put(key, new Word(key, values.getString(0), values.getString(1), values.getString(2)));
         String stress = values.getString(3);
-        if (!stress.isEmpty()) usage.put(key, new JSONObject().put("stress", stress));
+        if (!stress.isEmpty()) {
+          JSONObject hints=usage.optJSONObject(key);
+          if(hints==null){hints=new JSONObject();usage.put(key,hints);}
+          if(!hints.has("stress"))hints.put("stress",stress);
+        }
+      }
+    }
+    try (BufferedReader reader=new BufferedReader(new InputStreamReader(
+        c.getAssets().open("review-evidence.json"),StandardCharsets.UTF_8))) {
+      reviewEvidence=new JSONObject(reader.readLine());
+      for(Iterator<String> it=reviewEvidence.keys();it.hasNext();){
+        String key=it.next();
+        JSONObject record=reviewEvidence.getJSONObject(key);
+        String stress=record.optString("stress");
+        if(!stress.isEmpty()){
+          JSONObject hint=usage.optJSONObject(key);
+          if(hint==null){hint=new JSONObject();usage.put(key,hint);}
+          if(!hint.has("stress") || record.has("meaning"))hint.put("stress",stress);
+        }
+        if(record.has("meaning")){
+          Word previous=publishedWord(key);
+          if(previous==null)continue;
+          Word corrected=new Word(key,stress.replace("́",""),record.getString("meaning"),previous.pos);
+          if(core.containsKey(key))core.put(key,corrected);
+          else supplements.put(key,corrected);
+        }
       }
     }
     try (BufferedReader reader=new BufferedReader(new InputStreamReader(c.getAssets().open("dictionary-shortcuts.json"),StandardCharsets.UTF_8))) {

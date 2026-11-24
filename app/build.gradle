@@ -8,8 +8,8 @@ android {
         minSdk 26
         testInstrumentationRunner 'studio.tingye.reader.SlovoChecks'
         targetSdk 34
-        versionCode 12
-        versionName '0.10.0'
+        versionCode 13
+        versionName '0.10.1'
     }
     def devKey = new File(System.getenv('LOCALAPPDATA') ?: '.', 'Tingye/keys/development.jks')
     signingConfigs {

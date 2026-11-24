@@ -32,7 +32,7 @@ abstract class PaperActivity extends Activity {
   private final java.util.WeakHashMap<View,Boolean> fitted = new java.util.WeakHashMap<>();
   FrameLayout stage;
   private FrameLayout tabTrack;
-  private View indicator, tabBorder;
+  private View tabBorder;
   private int activeTab = -1;
   private final ImageView[] tabIcons = new ImageView[PaperActivity.TAB_IDS.length];
   private final TextView[] tabLabels = new TextView[PaperActivity.TAB_IDS.length];
@@ -167,12 +167,11 @@ abstract class PaperActivity extends Activity {
     v.jumpDrawablesToCurrentState();
   }
 
-  void arrive(View v, float dx, float dy, int duration) {
-    if (!ValueAnimator.areAnimatorsEnabled()) return;
+  void arrive(View v, int duration) {
     v.animate().cancel();
-    v.setTranslationX(dp(dx));
-    v.setTranslationY(dp(dy));
-    v.animate().translationX(0).translationY(0).setDuration(duration).setInterpolator(SETTLE).start();
+    if (!ValueAnimator.areAnimatorsEnabled()) { v.setAlpha(1f); return; }
+    v.setAlpha(.82f);
+    v.animate().alpha(1f).setDuration(duration).setInterpolator(SETTLE).start();
   }
 
   void landscape(View v, int location, int mode, int curve) {
@@ -242,7 +241,7 @@ abstract class PaperActivity extends Activity {
       }
     };
     v.setOrientation(vertical ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
-    if (!vertical) v.setGravity(Gravity.CENTER_VERTICAL);
+    if (!vertical) { v.setBaselineAligned(false); v.setGravity(Gravity.CENTER_VERTICAL); }
     return v;
   }
 
@@ -325,7 +324,9 @@ abstract class PaperActivity extends Activity {
       sym(v, glyph, primary ? white : blue, 20);
       gap(v, 8);
     }
-    v.addView(txt(label, 16, primary ? white : ink, true));
+    TextView caption=txt(label,16,primary ? white : ink,true);
+    caption.setGravity(Gravity.CENTER);
+    v.addView(caption,new LinearLayout.LayoutParams(-2,-2));
     v.setContentDescription(label);
     return v;
   }
@@ -465,15 +466,6 @@ abstract class PaperActivity extends Activity {
     tabBorder.setVisibility(show ? View.VISIBLE : View.GONE);
   }
 
-  private void positionIndicator(boolean animated) {
-    if (tabTrack.getWidth() == 0 || activeTab < 0) return;
-    float x = (activeTab + .5f) * tabTrack.getWidth() / TAB_IDS.length - dp(60) / 2f;
-    indicator.animate().cancel();
-    if (animated && ValueAnimator.areAnimatorsEnabled())
-      indicator.animate().translationX(x).setDuration(280).setInterpolator(SETTLE).start();
-    else indicator.setTranslationX(x);
-  }
-
   void tabs(String current, java.util.function.Consumer<String> select) {
     if (tabTrack == null) {
       tabBorder = new View(this);
@@ -482,10 +474,6 @@ abstract class PaperActivity extends Activity {
       tabTrack = new FrameLayout(this);
       tabTrack.setBackground(TideControls.surface(this,0xeefaf9ef,0xffecefe5,0,0));
       add(root, tabTrack, 64);
-      indicator = new View(this);
-      indicator.setBackground(TideControls.surface(this,0xcafffff5,0x939bc6b5,17,0xc1fffff9));
-      indicator.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-      tabTrack.addView(indicator, new FrameLayout.LayoutParams(dp(60), dp(35)));
       nav = box(false);
       tabTrack.addView(nav, new FrameLayout.LayoutParams(-1, -1));
       String[] titles = {"对话", "斩词", "词库", "搜词", "我的"};
@@ -513,23 +501,19 @@ abstract class PaperActivity extends Activity {
         item.addView(tabLabels[i]);
         nav.addView(item, new LinearLayout.LayoutParams(0, -1, 1));
       }
-      tabTrack.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob) -> {
-        indicator.setTranslationY(((ViewGroup)nav.getChildAt(0)).getChildAt(0).getTop()-dp(4));
-        if (r-l != or-ol) positionIndicator(false);
-      });
     }
-    boolean visible = tabTrack.getVisibility() == View.VISIBLE;
     showTabs(true);
     int target = tabIndex(current);
     if (target == activeTab) return;
-    boolean animate = visible && activeTab >= 0;
     activeTab = target;
     for (int i = 0; i < TAB_IDS.length; i++) {
       boolean on = i == target;
       nav.getChildAt(i).setSelected(on);
+      ((View)tabIcons[i].getParent()).setBackground(on ?
+          TideControls.surface(this,0xcafffff5,0x939bc6b5,14,0xc1fffff9) : null);
       tabIcons[i].setColorFilter(on ? blue : muted);
       tabLabels[i].setTextColor(on ? blue : muted);
     }
-    positionIndicator(animate);
+
   }
 }

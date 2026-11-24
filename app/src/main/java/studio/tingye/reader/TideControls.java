@@ -159,6 +159,7 @@ final class TideControls {
 
   static void dialogButton(Button b, boolean primary) {
     Context c=b.getContext();
+    b.setGravity(Gravity.CENTER);
     b.setAllCaps(false);
     b.setTextColor(primary ? 0xfffffcf3 : INK);
     b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
